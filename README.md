@@ -1,5 +1,5 @@
 # USMS
-An unofficial Python library to interface with your USMS account and smart meters.
+An unofficial Python library to interface with your [USMS](https://www.usms.com.bn/smartmeter/about.html) account and smart meters.
 
 
 
