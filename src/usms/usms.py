@@ -333,7 +333,7 @@ class USMSAccount:
                     )
                 except Exception as error:
                     _LOGGER.error(f"Encountered error initializing meter: {error}")
-                    self.check_session()
+                    self.account.check_session()
                 else:
                     break
 
