@@ -69,7 +69,7 @@ class USMSAccount:
                     f"Login failed with error: {error_message}"
                 )
 
-        sig = response.headers["location"].split("=")[-1]
+        sig = response.headers["location"].split("Sig=")[-1].split("&")[-1]
 
         self.session_get(
             f"https://www.usms.com.bn/SmartMeter/LoginSession.aspx?pLoginName={self.username}&Sig={sig}"
