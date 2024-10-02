@@ -1,11 +1,13 @@
 import base64
+import httpx
 import logging
-import requests
+import lxml.html
+import typing
 import urllib.parse
 
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -13,10 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 class USMSAccount:
     """Represents a USMS account."""
 
-    username: str
-    password: str
-
-    session: requests.Session
+    _session: None
 
     """USMS Account class attributes."""
     reg_no: str
@@ -26,733 +25,646 @@ class USMSAccount:
     meters: list
 
     def __init__(self, username: str, password: str) -> None:
-
-        self.username = username
-        self.password = password
-
-        self.session = requests.Session()
-        self.login()
+        self._session = USMSClient(username, password)
 
         self.initialize()
-
-    def login(self) -> None:
-        """Login through the homepage to initialize a new active session"""
-
-        _LOGGER.debug("Logging in...")
-
-        response = self.session_post("https://www.usms.com.bn/SmartMeter/ResLogin")
-
-        payload = self.get_aspx_state(response)
-        payload["ASPxRoundPanel1$btnLogin"] = "Login"
-        payload["ASPxRoundPanel1$txtUsername"] = self.username
-        payload["ASPxRoundPanel1$txtPassword"] = self.password
-
-        response = self.session_post(
-            "https://www.usms.com.bn/SmartMeter/ResLogin",
-            data=payload,
-            allow_redirects=False,
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        # check if login failed
-        if soup.find("span", id="pcErr_lblErrMsg"):
-            error_message = soup.find("span", id="pcErr_lblErrMsg").text
-            if error_message == "The given key was not present in the dictionary.":
-                _LOGGER.error("Incorrect password.")
-                raise ConnectionRefusedError("Incorrect password.")
-            elif error_message == "Incorrect user name and password.":
-                _LOGGER.error("User does not exist.")
-                raise ConnectionRefusedError("User does not exist.")
-            elif error_message != "":
-                _LOGGER.error(f"Login failed with error: {error_message}")
-                raise ConnectionRefusedError(
-                    f"Login failed with error: {error_message}"
-                )
-
-        sig = response.headers["location"].split("Sig=")[-1].split("&")[-1]
-
-        self.session_get(
-            f"https://www.usms.com.bn/SmartMeter/LoginSession.aspx?pLoginName={self.username}&Sig={sig}"
-        )
-
-        _LOGGER.debug("Logged in!")
 
     def initialize(self) -> None:
         """Retrieves initial USMS Account attributes."""
 
-        while True:
-            try:
-                _LOGGER.debug(f"Initializing account {self.username}")
+        _LOGGER.debug(f"Initializing account")
 
-                response = self.session_get(
-                    "https://www.usms.com.bn/SmartMeter/AccountInfo"
-                )
-                soup = BeautifulSoup(response.content, "html.parser")
+        response = self._session.get("/AccountInfo")
+        response_html = lxml.html.fromstring(response.content)
 
-                self.reg_no = soup.find(id="ASPxFormLayout1_lblIDNumber").text.strip()
-                self.name = soup.find(id="ASPxFormLayout1_lblName").text.strip()
-                self.contact_no = soup.find(
-                    id="ASPxFormLayout1_lblContactNo"
-                ).text.strip()
-                self.email = soup.find(id="ASPxFormLayout1_lblEmail").text.strip()
+        self.reg_no = response_html.find(
+            """.//span[@id="ASPxFormLayout1_lblIDNumber"]"""
+        ).text_content()
+        self.name = response_html.find(
+            """.//span[@id="ASPxFormLayout1_lblName"]"""
+        ).text_content()
+        self.contact_no = response_html.find(
+            """.//span[@id="ASPxFormLayout1_lblContactNo"]"""
+        ).text_content()
+        self.email = response_html.find(
+            """.//span[@id="ASPxFormLayout1_lblEmail"]"""
+        ).text_content()
 
-                self.meters = []
-                root = soup.find(class_="dxpnl-acc")  # Nx_y_z
-                for x, lvl1 in enumerate(
-                    root.find("ul").findChildren("li", recursive=False)
-                ):
-                    for y, lvl2 in enumerate(
-                        lvl1.find("ul").findChildren("li", recursive=False)
-                    ):
-                        for z, lvl3 in enumerate(
-                            lvl2.find("ul").findChildren("li", recursive=False)
-                        ):
-                            meter = self.USMSMeter(self, f"N{x}_{y}_{z}")
-                            self.meters.append(meter)
+        self.meters = []
+        root = response_html.find(
+            """.//div[@id="ASPxPanel1_ASPxTreeView1_CD"]"""
+        )  # Nx_y_z
+        for x, lvl1 in enumerate(root.findall("./ul/li")):
+            for y, lvl2 in enumerate(lvl1.findall("./ul/li")):
+                for z, lvl3 in enumerate(lvl2.findall("./ul/li")):
+                    meter = USMSMeter(self, f"N{x}_{y}_{z}")
+                    self.meters.append(meter)
 
-                _LOGGER.debug(f"Initialized account {self.username}")
-            except Exception as error:
-                _LOGGER.error(f"Encountered error initializing account: {error}")
-                self.check_session()
-            else:
-                break
-
-    def get_aspx_state(self, response: requests.Response) -> dict:
-        """Returns the ASPX state generated by the server from a response page."""
-
-        soup = BeautifulSoup(response.content, "html.parser")
-        payload = {}
-
-        for element in soup.find_all("input"):
-            if (
-                element.get("type") == "hidden"
-                and element.get("id")
-                and element.get("value")
-            ):
-                payload[element["id"]] = element["value"]
-
-        return payload
-
-    def is_session_expired(self) -> bool:
-        """Return True if request session is expired."""
-
-        _LOGGER.debug("Checking session validity")
-
-        url = "https://www.usms.com.bn/SmartMeter/Home"
-        response = self.session_get(url)
-
-        if response.url != url:
-            _LOGGER.debug("Session is expired")
-            return True
-
-        _LOGGER.debug("Session is still valid")
-        return False
-
-    def check_session(self) -> None:
-        """Checks and renews session if it is expired."""
-        if self.is_session_expired():
-            _LOGGER.debug("Re-logging in")
-            self.login()
-
-    def session_get(self, url: str) -> requests.Response:
-        """Attempts a GET request until successful and returns the response."""
-
-        while True:
-            try:
-                response = self.session.get(url)
-            except Exception as error:
-                _LOGGER.error(f"Encountered error in GETting: {error}")
-                pass
-            else:
-                break
-
-        return response
-
-    def session_post(
-        self,
-        url: str,
-        allow_redirects=True,
-        data="",
-        headers={},
-    ) -> requests.Response:
-        """Attempts a POST request until successful and returns the response."""
-
-        if data != "" and headers == {}:
-            headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-        while True:
-            try:
-                response = self.session.post(
-                    url,
-                    data=urllib.parse.urlencode(data),
-                    headers=headers,
-                    allow_redirects=allow_redirects,
-                )
-            except Exception as error:
-                _LOGGER.error(f"Encountered error in POSTing: {error}")
-            else:
-                break
-
-        return response
-
-    def get_meters(self) -> list:
-        return self.meters
+        _LOGGER.debug(f"Initialized account {self.reg_no} {self.name}")
 
     def get_meter(self, meter_no: str):
         for meter in self.meters:
-            if meter.id == meter_no:
-                return meter
-            elif meter.no == meter_no:
+            if meter.id == meter_no or meter.no == meter_no:
                 return meter
         raise ValueError(f"Meter {meter_no} does not exist under this account.")
 
-    class USMSMeter:
-        """Represents a USMS meter under an account."""
 
-        TARIFFS = {
-            "Electricity": [
-                [1, 600, 0.01],
-                [601, 2000, 0.08],
-                [2001, 4000, 0.10],
-                [4001, float("inf"), 0.12],
-            ],
-            "Water": [
-                [1, 54.54, 0.11],
-                [54.54, float("inf"), 0.44],
-            ],
-        }
-        TIMEZONE = ZoneInfo("Asia/Brunei")
-        UNITS = {"Electricity": "kWh", "Water": "meter cube"}
+class USMSMeter:
+    """Represents a USMS meter under an account."""
 
-        """USMS Meter class attributes."""
-        account: None
-        node_no: str
+    TARIFFS = {
+        "Electricity": [
+            [1, 600, 0.01],
+            [601, 2000, 0.08],
+            [2001, 4000, 0.10],
+            [4001, float("inf"), 0.12],
+        ],
+        "Water": [
+            [1, 54.54, 0.11],
+            [54.54, float("inf"), 0.44],
+        ],
+    }
+    TIMEZONE = ZoneInfo("Asia/Brunei")
+    UNITS = {
+        "Electricity": "kWh",
+        "Water": "meter cube",  # TODO
+    }
 
-        address: str
-        kampong: str
-        mukim: str
-        district: str
-        postcode: str
+    """USMS Meter class attributes."""
+    _account: None
+    node_no: str
 
-        no: str
-        id: str  # base64 encoded meter no
+    address: str
+    kampong: str
+    mukim: str
+    district: str
+    postcode: str
 
-        type: str
-        customer_type: str
-        remaining_unit: float
-        remaining_credit: float
+    no: str
+    id: str  # base64 encoded meter no
 
-        last_update: datetime
+    type: str
+    customer_type: str
+    remaining_unit: float
+    remaining_credit: float
 
-        status: str
+    last_update: datetime
 
-        def __init__(self, account, node_no: str) -> None:
-            self.account = account
-            self.node_no = node_no
+    status: str
 
-            self.initialize()
+    def __init__(self, account, node_no) -> None:
+        self._account = account
+        self._node_no = node_no
 
-        def initialize(self) -> None:
-            """Retrieves initial USMS Meter attributes."""
+        self.initialize()
 
-            while True:
-                try:
-                    _LOGGER.debug(
-                        f"Initializing meter {self.node_no} for account {self.account.username}"
-                    )
+    def initialize(self) -> None:
+        """Retrieves initial USMS Meter attributes."""
 
-                    url = "https://www.usms.com.bn/SmartMeter/AccountInfo"
+        # build payload
+        payload = {}
+        payload["ASPxTreeView1"] = (
+            "{&quot;nodesState&quot;:[{&quot;N0_0&quot;:&quot;T&quot;,&quot;N0&quot;:&quot;T&quot;},&quot;"
+            + self._node_no
+            + "&quot;,{}]}"
+        )
+        payload["__EVENTARGUMENT"] = f"NCLK|{self._node_no}"
+        payload["__EVENTTARGET"] = "ASPxPanel1$ASPxTreeView1"
 
-                    response = self.account.session_get(url)
-                    payload = self.account.get_aspx_state(response)
-                    payload["ASPxTreeView1"] = (
-                        """{&quot;nodesState&quot;:[{&quot;N0_0&quot;:&quot;T&quot;,&quot;N0&quot;:&quot;T&quot;},&quot;"""
-                        + self.node_no
-                        + """&quot;,{}]}"""
-                    )
-                    payload["__EVENTARGUMENT"] = f"NCLK|{self.node_no}"
-                    payload["__EVENTTARGET"] = "ASPxPanel1$ASPxTreeView1"
+        self._account._session.get("/AccountInfo")
+        response = self._account._session.post("/AccountInfo", data=payload)
+        response_html = lxml.html.fromstring(response.content)
 
-                    response = self.account.session_post(url, data=payload)
-                    soup = BeautifulSoup(response.content, "html.parser")
+        # checks for error in retrieving page
+        if response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]""") is None:
+            raise Exception(f"Error initializing {self.type} meter {self.no}")
 
-                    self.address = soup.find(
-                        id="ASPxFormLayout1_lblAddress"
-                    ).text.strip()
-                    self.kampong = soup.find(
-                        id="ASPxFormLayout1_lblKampong"
-                    ).text.strip()
-                    self.mukim = soup.find(id="ASPxFormLayout1_lblMukim").text.strip()
-                    self.district = soup.find(
-                        id="ASPxFormLayout1_lblDistrict"
-                    ).text.strip()
-                    self.postcode = soup.find(
-                        id="ASPxFormLayout1_lblPostcode"
-                    ).text.strip()
+        self.address = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]""")
+            .text_content()
+            .strip()
+        )
+        self.kampong = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblKampong"]""")
+            .text_content()
+            .strip()
+        )
+        self.mukim = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblMukim"]""")
+            .text_content()
+            .strip()
+        )
+        self.district = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblDistrict"]""")
+            .text_content()
+            .strip()
+        )
+        self.postcode = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblPostcode"]""")
+            .text_content()
+            .strip()
+        )
 
-                    self.no = soup.find(id="ASPxFormLayout1_lblMeterNo").text.strip()
-                    self.id = base64.b64encode(self.no.encode()).decode()
+        self.no = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblMeterNo"]""")
+            .text_content()
+            .strip()
+        )
+        self.id = base64.b64encode(self.no.encode()).decode()
 
-                    self.type = soup.find(
-                        id="ASPxFormLayout1_lblMeterType"
-                    ).text.strip()
-                    self.customer_type = soup.find(
-                        id="ASPxFormLayout1_lblCustomerType"
-                    ).text.strip()
+        self.type = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblMeterType"]""")
+            .text_content()
+            .strip()
+        )
+        self.customer_type = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblCustomerType"]""")
+            .text_content()
+            .strip()
+        )
 
-                    self.remaining_unit = float(
-                        soup.find(id="ASPxFormLayout1_lblRemainingUnit")
-                        .text.split()[0]
-                        .replace(",", "")
-                    )
-                    self.remaining_credit = float(
-                        soup.find(id="ASPxFormLayout1_lblCurrentBalance")
-                        .text.split("$")[-1]
-                        .replace(",", "")
-                    )
+        self.remaining_unit = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblRemainingUnit"]""")
+            .text_content()
+            .strip()
+        )
+        self.remaining_unit = float(self.remaining_unit.split()[0].replace(",", ""))
 
-                    last_update = soup.find(
-                        id="ASPxFormLayout1_lblLastUpdated"
-                    ).text.strip()
-                    date = last_update.split()[0].split("/")
-                    time = last_update.split()[1].split(":")
-                    self.last_update = datetime(
-                        int(date[2]),
-                        int(date[1]),
-                        int(date[0]),
-                        hour=int(time[0]),
-                        minute=int(time[1]),
-                        second=int(time[2]),
-                        tzinfo=self.TIMEZONE,
-                    )
+        self.remaining_credit = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblCurrentBalance"]""")
+            .text_content()
+            .strip()
+        )
+        self.remaining_credit = float(
+            self.remaining_credit.split("$")[-1].replace(",", "")
+        )
 
-                    self.status = soup.find(id="ASPxFormLayout1_lblStatus").text.strip()
+        self.last_update = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblLastUpdated"]""")
+            .text_content()
+            .strip()
+        )
+        date = self.last_update.split()[0].split("/")
+        time = self.last_update.split()[1].split(":")
+        self.last_update = datetime(
+            int(date[2]),
+            int(date[1]),
+            int(date[0]),
+            hour=int(time[0]),
+            minute=int(time[1]),
+            second=int(time[2]),
+            tzinfo=self.TIMEZONE,
+        )
 
-                    _LOGGER.debug(
-                        f"Initialized meter {self.node_no} as {self.type} meter {self.no}"
-                    )
-                except Exception as error:
-                    _LOGGER.error(f"Encountered error initializing meter: {error}")
-                    self.account.check_session()
-                else:
-                    break
+        self.status = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblStatus"]""")
+            .text_content()
+            .strip()
+        )
 
-        def update(self, force=False) -> bool:
-            """
-            Retrieves updated values for the following attributes:
-                - remaining unit
-                - remaining credit
-                - last update
-            Returns a boolean indicating there was an update.
-            """
+        _LOGGER.debug(f"Initialized {self.type} meter {self.no}")
 
-            _LOGGER.debug(f"Retrieving updates for meter {self.no}")
+    def update(self, force=False) -> bool:
+        """
+        Retrieves updated values for the following attributes:
+            - remaining unit
+            - remaining credit
+            - last update
+        Returns a boolean indicating there was an update.
+        """
 
-            """
-            Tries to limit unnecessary calls to the site by
-            checking if at least an hour has passed since last meter update
-            i.e. no new meter update available yet
-            """
-            if not force:
-                now = datetime.now(tz=ZoneInfo("Asia/Brunei"))
-                if (now - self.last_update).total_seconds() <= 3600:
-                    _LOGGER.warning(
-                        f"Not enough time has passed since last update: {self.last_update}"
-                    )
-                    return False
+        """
+        Tries to limit unnecessary calls to the site by
+        checking if at least an hour has passed since last meter update
+        i.e. no new meter update available yet
+        """
+        if not force:
+            now = datetime.now(tz=ZoneInfo("Asia/Brunei"))
+            if (now - self.last_update).total_seconds() <= 3600:
+                _LOGGER.warning(
+                    f"Not enough time has passed since last update: {self.last_update}"
+                )
+                return False
 
-            # Checks first if session is expired and needs renewal
-            self.account.check_session()
+        # build payload
+        payload = {}
+        payload["ASPxTreeView1"] = (
+            "{&quot;nodesState&quot;:[{&quot;N0_0&quot;:&quot;T&quot;,&quot;N0&quot;:&quot;T&quot;},&quot;"
+            + self._node_no
+            + "&quot;,{}]}"
+        )
+        payload["__EVENTARGUMENT"] = f"NCLK|{self._node_no}"
+        payload["__EVENTTARGET"] = "ASPxPanel1$ASPxTreeView1"
 
-            url = "https://www.usms.com.bn/SmartMeter/AccountInfo"
+        self._account._session.get("/AccountInfo")
+        response = self._account._session.post("/AccountInfo", data=payload)
+        response_html = lxml.html.fromstring(response.content)
 
-            while True:
-                try:
-                    response = self.account.session_get(url)
-                    payload = self.account.get_aspx_state(response)
-                    payload["ASPxTreeView1"] = (
-                        """{&quot;nodesState&quot;:[{&quot;N0_0&quot;:&quot;T&quot;,&quot;N0&quot;:&quot;T&quot;},&quot;"""
-                        + self.node_no
-                        + """&quot;,{}]}"""
-                    )
-                    payload["__EVENTARGUMENT"] = f"NCLK|{self.node_no}"
-                    payload["__EVENTTARGET"] = "ASPxPanel1$ASPxTreeView1"
+        # checks for error in retrieving page
+        if not response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]"""):
+            _LOGGER.error(f"Error retrieving updates for {self.type} meter {self.no}")
+            return False
 
-                    response = self.account.session_post(url, data=payload)
-                    soup = BeautifulSoup(response.content, "html.parser")
+        self.remaining_unit = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblRemainingUnit"]""")
+            .text_content()
+            .strip()
+        )
+        self.remaining_unit = float(self.remaining_unit.split()[0].replace(",", ""))
 
-                    self.remaining_unit = float(
-                        soup.find(id="ASPxFormLayout1_lblRemainingUnit")
-                        .text.split()[0]
-                        .replace(",", "")
-                    )
-                    self.remaining_credit = float(
-                        soup.find(id="ASPxFormLayout1_lblCurrentBalance")
-                        .text.split("$")[-1]
-                        .replace(",", "")
-                    )
+        self.remaining_credit = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblCurrentBalance"]""")
+            .text_content()
+            .strip()
+        )
+        self.remaining_credit = float(
+            self.remaining_credit.split("$")[-1].replace(",", "")
+        )
 
-                    last_update = soup.find(
-                        id="ASPxFormLayout1_lblLastUpdated"
-                    ).text.strip()
-                    date = last_update.split()[0].split("/")
-                    time = last_update.split()[1].split(":")
-                    self.last_update = datetime(
-                        int(date[2]),
-                        int(date[1]),
-                        int(date[0]),
-                        hour=int(time[0]),
-                        minute=int(time[1]),
-                        second=int(time[2]),
-                        tzinfo=self.TIMEZONE,
-                    )
+        self.last_update = (
+            response_html.find(""".//span[@id="ASPxFormLayout1_lblLastUpdated"]""")
+            .text_content()
+            .strip()
+        )
+        date = self.last_update.split()[0].split("/")
+        time = self.last_update.split()[1].split(":")
+        self.last_update = datetime(
+            int(date[2]),
+            int(date[1]),
+            int(date[0]),
+            hour=int(time[0]),
+            minute=int(time[1]),
+            second=int(time[2]),
+            tzinfo=self.TIMEZONE,
+        )
 
-                    _LOGGER.debug(f"Retrieved updates for meter {self.no}")
-                except Exception as error:
-                    _LOGGER.error(error)
-                    self.account.check_session()
-                    # raise Exception(error)
-                else:
-                    break
+        _LOGGER.debug(f"Retrieved updates for {self.type} meter {self.no}")
+        return True
 
+    def get_hourly_consumptions(self, date: datetime) -> dict:
+        """Returns the hourly unit consumptions for a given day."""
+
+        now = datetime.now()
+
+        # make sure the given day is not in the future
+        if date > now:
+            _LOGGER.error(f"Given date {date} is in the future!")
+            raise Exception(f"Given date {date} is in the future!")
+
+        yyyy = date.year
+        mm = str(date.month).zfill(2)
+        dd = str(date.day).zfill(2)
+        epoch = date.strftime("%s") + "000"
+
+        # build payload
+        payload = {}
+        payload["cboType_VI"] = "3"
+        payload["cboType"] = "Hourly (Max 1 day)"
+        payload["btnRefresh"] = "Search"
+        payload["cboDateFrom"] = f"{dd}/{mm}/{yyyy}"
+        payload["cboDateTo"] = f"{dd}/{mm}/{yyyy}"
+        payload["cboDateFrom$State"] = (
+            "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
+        )
+        payload["cboDateTo$State"] = (
+            "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
+        )
+
+        self._account._session.get(f"/Report/UsageHistory?p={self.id}")
+        self._account._session.post(f"/Report/UsageHistory?p={self.id}")
+        self._account._session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        response = self._account._session.post(
+            f"/Report/UsageHistory?p={self.id}", data=payload
+        )
+        response_html = lxml.html.fromstring(response.content)
+
+        error_message = response_html.find(
+            """.//span[@id="pcErr_lblErrMsg"]"""
+        ).text_content()
+        if error_message:
+            raise Exception(error_message)
+
+        table = response_html.find(
+            """.//table[@id="ASPxPageControl1_grid_DXMainTable"]"""
+        )
+
+        hourly_consumptions = {}
+        for row in table.findall(""".//tr[@class="dxgvDataRow"]"""):
+            row = row.findall(".//td")
+
+            hour = int(row[0].text_content())
+            consumption = float(row[1].text_content())
+
+            hourly_consumptions[hour] = consumption
+
+        _LOGGER.debug(f"Retrieved consumption info for day of: {date}")
+        return hourly_consumptions
+
+    def get_daily_consumptions(self, date: datetime) -> dict:
+        """Returns the daily unit consumptions for a given month."""
+
+        now = datetime.now()
+
+        # make sure the given day is not in the future
+        if date > now:
+            _LOGGER.error(f"Given date {date} is in the future!")
+            raise Exception(f"Given date {date} is in the future!")
+
+        date_from = datetime(date.year, date.month, 1, 8, 0, 0, tzinfo=self.TIMEZONE)
+        epoch_from = date_from.strftime("%s") + "000"
+
+        # check if given month is still ongoing
+        if date.year == now.year and date.month == now.month:
+            # then get consumption up until yesterday only
+            date = date - timedelta(days=1)
+        else:
+            # otherwise get until the last day of the month
+            next_month = date.replace(day=28) + timedelta(days=4)
+            date.replace(day=next_month - timedelta(days=next_month.day))
+
+        yyyy = date.year
+        mm = str(date.month).zfill(2)
+        dd = str(date.day).zfill(2)
+        epoch_to = date.strftime("%s") + "000"
+
+        # build payload
+        payload = {}
+        payload["cboType_VI"] = "1"
+        payload["cboType"] = "Daily (Max 1 month)"
+        payload["btnRefresh"] = "Search"
+        payload["cboDateFrom"] = f"01/{mm}/{yyyy}"
+        payload["cboDateTo"] = f"{dd}/{mm}/{yyyy}"
+        payload["cboDateFrom$State"] = (
+            "{" + f"&quot;rawValue&quot;:&quot;{epoch_from}&quot;" + "}"
+        )
+        payload["cboDateTo$State"] = (
+            "{" + f"&quot;rawValue&quot;:&quot;{epoch_to}&quot;" + "}"
+        )
+
+        self._account._session.get(f"/Report/UsageHistory?p={self.id}")
+        self._account._session.post(f"/Report/UsageHistory?p={self.id}")
+        self._account._session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        response = self._account._session.post(
+            f"/Report/UsageHistory?p={self.id}", data=payload
+        )
+        response_html = lxml.html.fromstring(response.content)
+
+        error_message = response_html.find(
+            """.//span[@id="pcErr_lblErrMsg"]"""
+        ).text_content()
+        if error_message:
+            raise Exception(error_message)
+
+        table = response_html.find(
+            """.//table[@id="ASPxPageControl1_grid_DXMainTable"]"""
+        )
+
+        daily_consumptions = {}
+        for row in table.findall(""".//tr[@class="dxgvDataRow"]"""):
+            row = row.findall(".//td")
+
+            day = int(row[0].text_content().split("/")[0])
+            consumption = float(row[1].text_content())
+
+            daily_consumptions[day] = consumption
+
+        _LOGGER.debug(f"Retrieved consumption info for month of: {date}")
+        return daily_consumptions
+
+    def get_total_day_consumption(self, date: datetime) -> float:
+        """Returns the total unit consumption for a given day"""
+
+        hourly_consumptions = self.get_hourly_consumptions(date)
+
+        total_consumption = 0
+        for hour, consumption in hourly_consumptions.items():
+            total_consumption += consumption
+
+        return round(total_consumption, 3)
+
+    def get_total_month_consumption(self, date: datetime) -> float:
+        """Returns the total unit consumption for a given month."""
+
+        daily_consumptions = self.get_daily_consumptions(date)
+
+        total_consumption = 0
+        for day, consumption in daily_consumptions.items():
+            total_consumption += consumption
+
+        return round(total_consumption, 3)
+
+    def get_consumption(self, date: datetime) -> float:
+        """Returns the unit consumption for a given hour."""
+
+        hourly_consumptions = self.get_hourly_consumptions(date)
+        consumption = hourly_consumptions.get(date.hour, 0.0)
+
+        return consumption
+
+    def get_last_consumption(self) -> float:
+        """Returns the unit consumption for the last hour."""
+
+        date = datetime.now()
+        consumption = self.get_consumption(date)
+
+        if consumption == 0.0:
+            _LOGGER.warning(f"No consumption recorded yet for hour {date.hour}")
+
+        return consumption
+
+    def get_total_month_cost(self, date: datetime) -> float:
+        """Returns the total cost for a given month."""
+
+        total_consumption = self.get_total_month_consumption(date)
+        total_cost = self.calculate_cost(total_consumption, self.type)
+
+        return round(total_cost, 2)
+
+    def calculate_cost(self, consumption: float, type="") -> float:
+        """Calculates and returns the cost for given unit consumption, according to the tariff"""
+
+        if type == "":
+            type = self.type
+
+        cost = 0.0
+        for tier in self.TARIFFS.get(self.type):
+            lower_bound = tier[0]
+            upper_bound = tier[1]
+            cost_per_unit = tier[2]
+
+            bound_range = upper_bound - lower_bound + 1
+
+            if consumption <= bound_range:
+                cost += consumption * cost_per_unit
+                break
+            else:
+                consumption -= bound_range
+                cost += bound_range * cost_per_unit
+
+        return round(cost, 2)
+
+    def calculate_unit(self, cost: float, type="") -> float:
+        """Calculates and returns the unit received for the cost paid, according to the tariff"""
+
+        if type == "":
+            type = self.type
+
+        unit = 0.0
+        for tier in self.TARIFFS.get(self.type):
+            lower_bound = tier[0]
+            upper_bound = tier[1]
+            cost_per_unit = tier[2]
+
+            bound_range = upper_bound - lower_bound + 1
+            bound_cost = bound_range * cost_per_unit
+
+            if cost <= bound_cost:
+                unit += cost / cost_per_unit
+            else:
+                cost -= bound_cost
+                unit += bound_range
+
+        return round(unit, 2)
+
+    def get_remaining_unit(self) -> float:
+        """Returns the last recorded unit for the meter."""
+
+        return self.remaining_unit
+
+    def get_remaining_credit(self) -> float:
+        """Returns the last recorded credit for the meter."""
+
+        return self.remaining_credit
+
+    def get_last_updated(self) -> datetime:
+        """Returns the last update time for the meter."""
+
+        return self.last_update
+
+    def is_active(self) -> bool:
+        """Returns True if the meter status is active."""
+
+        return self.status == "ACTIVE"
+
+    def get_unit(self) -> str:
+        """Returns the unit for this meter type"""
+
+        return self.UNITS[self.type]
+
+    def get_no(self) -> str:
+        """Returns this meter's meter no"""
+
+        return self.no
+
+    def get_type(self) -> str:
+        """Returns this meter's type (Electricity or Water)"""
+
+        return self.type
+
+
+class USMSClient(httpx.Client):
+    def __init__(self, username: str, password: str) -> None:
+        super().__init__()
+
+        self.auth = USMSAuth(username, password)
+        self.base_url = "https://www.usms.com.bn/SmartMeter/"
+        self.event_hooks["response"] = [self._get_asp_state]
+        self.http2 = True
+        self.timeout = 30.0
+
+        self._asp_state = {}
+
+    def post(self, url: str, data: dict = {}) -> httpx.Response:
+        """
+        Send a `POST` request.
+
+        **Parameters**: See `httpx.request`.
+        """
+
+        if self._asp_state and data:
+            for asp_key, asp_value in self._asp_state.items():
+                if not data.get(asp_key):
+                    data[asp_key] = asp_value
+
+        return super().post(url=url, data=data)
+
+    def _get_asp_state(self, response: httpx.Response):
+        response_html = lxml.html.fromstring(response.read())
+
+        for hidden_input in response_html.findall(""".//input[@type="hidden"]"""):
+            if hidden_input.value:
+                self._asp_state[hidden_input.name] = hidden_input.value
+
+
+class USMSAuth(httpx.Auth):
+    requires_response_body = True
+
+    def __init__(self, username: str, password: str) -> None:
+        self._username = username
+        self._password = password
+
+    def sync_auth_flow(
+        self, request: httpx.Request
+    ) -> typing.Generator[httpx.Request, httpx.Response, None]:
+        response = yield request
+
+        if self.is_expired(response):
+            response = yield httpx.Request(
+                method="POST",
+                url="https://www.usms.com.bn/SmartMeter/ResLogin",
+            )
+            response_html = lxml.html.fromstring(response.content)
+
+            asp_state = {}
+            for hidden_input in response_html.findall(""".//input[@type="hidden"]"""):
+                asp_state[hidden_input.name] = hidden_input.value
+            asp_state["ASPxRoundPanel1$btnLogin"] = "Login"
+            asp_state["ASPxRoundPanel1$txtUsername"] = self._username
+            asp_state["ASPxRoundPanel1$txtPassword"] = self._password
+
+            response = yield httpx.Request(
+                method="POST",
+                url="https://www.usms.com.bn/SmartMeter/ResLogin",
+                data=asp_state,
+            )
+
+            response_html = lxml.html.fromstring(response.content)
+            error_message = response_html.find(""".//*[@id="pcErr_lblErrMsg"]""")
+            if error_message:
+                _LOGGER.error(error_message.text_content())
+                raise Exception(error_message.text_content())
+
+            request.cookies = response.cookies
+            session_id = request.cookies["ASP.NET_SessionId"]
+            request.headers["cookie"] = f"ASP.NET_SessionId={session_id}"
+
+            sig = response.headers["location"].split("Sig=")[-1].split("&")[-1]
+            response = yield httpx.Request(
+                method="GET",
+                url=f"https://www.usms.com.bn/SmartMeter/LoginSession.aspx?pLoginName={self._username}&Sig={sig}",
+                cookies=request.cookies,
+            )
+
+            response = yield response.next_request
+            response = yield response.next_request
+            _LOGGER.debug("Logged in")
+
+            yield request
+
+    def is_expired(self, response: httpx.Response) -> bool:
+        """Checks response and returns True if the session has expired"""
+
+        expired = False
+
+        if response.status_code == 302:
+            if "SessionExpire" in response.text:
+                expired = True
+        elif response.status_code == 200:
+            if "Your Session Has Expired, Please Login Again." in response.text:
+                expired = True
+
+        if expired:
+            _LOGGER.debug("Session has expired")
             return True
 
-        def get_hourly_consumptions(self, date: datetime) -> dict:
-            """Returns the hourly unit consumptions for a given day."""
-
-            _LOGGER.debug(f"Retrieving consumption info for day of: {date}")
-
-            now = datetime.now()
-
-            # make sure the given day is not in the future
-            if date > now:
-                _LOGGER.error(f"Given date {date} is in the future!")
-                raise Exception(f"Given date {date} is in the future!")
-
-            yyyy = date.year
-            mm = str(date.month).zfill(2)
-            dd = str(date.day).zfill(2)
-            epoch = date.strftime("%s") + "000"
-
-            self.account.check_session()
-
-            while True:
-                try:
-                    # get initial page, retrieve first ASPX __VIEWSTATE
-                    response = self.account.session_get(
-                        f"https://www.usms.com.bn/SmartMeter/Report/UsageHistory?p={self.id}"
-                    )
-                    payload = self.account.get_aspx_state(response)
-
-                    # get hourly page and second ASPX __VIEWSTATE
-                    response = self.account.session_post(
-                        f"https://www.usms.com.bn/SmartMeter/Report/UsageHistory?p={self.id}",
-                        data=payload,
-                    )
-                    payload = self.account.get_aspx_state(response)
-                    payload["cboType_VI"] = "3"
-                    payload["cboType"] = "Hourly (Max 1 day)"
-                    payload["btnRefresh"] = "Search"
-                    payload["cboDateFrom"] = f"{dd}/{mm}/{yyyy}"
-                    payload["cboDateTo"] = f"{dd}/{mm}/{yyyy}"
-                    payload["cboDateFrom$State"] = (
-                        "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
-                    )
-                    payload["cboDateTo$State"] = (
-                        "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
-                    )
-
-                    # get hourly page and third ASPX __VIEWSTATE
-                    response = self.account.session_post(
-                        f"https://www.usms.com.bn/SmartMeter/Report/UsageHistory?p={self.id}",
-                        data=payload,
-                    )
-                    payload = self.account.get_aspx_state(response)
-                    payload["cboType_VI"] = "3"
-                    payload["cboType"] = "Hourly (Max 1 day)"
-                    payload["btnRefresh"] = "Search"
-                    payload["cboDateFrom"] = f"{dd}/{mm}/{yyyy}"
-                    payload["cboDateTo"] = f"{dd}/{mm}/{yyyy}"
-                    payload["cboDateFrom$State"] = (
-                        "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
-                    )
-                    payload["cboDateTo$State"] = (
-                        "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
-                    )
-
-                    # get final hourly page
-                    response = self.account.session_post(
-                        f"https://www.usms.com.bn/SmartMeter/Report/UsageHistory?p={self.id}",
-                        data=payload,
-                    )
-                    soup = BeautifulSoup(response.content, "html.parser")
-
-                    # check page is not returning error
-                    if soup.find(id="pcErr_lblErrMsg") is None:
-                        raise ConnectionResetError("Session has probably expired.")
-
-                    if soup.find(id="pcErr_lblErrMsg").text != "":
-                        raise Exception(soup.find(id="pcErr_lblErrMsg").text)
-
-                    table = soup.find("table", id="ASPxPageControl1_grid_DXMainTable")
-                    hourly_consumptions = {}
-
-                    for row in table.find_all("tr", class_="dxgvDataRow"):
-                        hour = int(row.find_all("td")[0].text)
-                        consumption = float(row.find_all("td")[1].text)
-
-                        hourly_consumptions[hour] = consumption
-
-                    _LOGGER.debug(f"Retrieved consumption info for day of: {date}")
-                except ConnectionResetError as error:
-                    _LOGGER.error(error)
-                    self.account.check_session()
-                except Exception as error:
-                    _LOGGER.error(error)
-                    raise Exception(error)
-                else:
-                    break
-
-            return hourly_consumptions
-
-        def get_daily_consumptions(self, date: datetime) -> dict:
-            """Returns the daily unit consumptions for a given month."""
-
-            _LOGGER.debug(f"Retrieving consumption info for month of: {date}")
-
-            now = datetime.now()
-
-            # make sure the given day is not in the future
-            if date > now:
-                _LOGGER.error(f"Given date {date} is in the future!")
-                raise Exception(f"Given date {date} is in the future!")
-
-            date_from = datetime(
-                date.year, date.month, 1, 8, 0, 0, tzinfo=self.TIMEZONE
-            )
-            epoch_from = date_from.strftime("%s") + "000"
-
-            # check if given month is still ongoing
-            if date.year == now.year and date.month == now.month:
-                # then get consumption up until yesterday only
-                date = date - timedelta(days=1)
-            else:
-                # otherwise get until the last day of the month
-                next_month = date.replace(day=28) + timedelta(days=4)
-                date.replace(day=next_month - timedelta(days=next_month.day))
-
-            yyyy = date.year
-            mm = str(date.month).zfill(2)
-            dd = str(date.day).zfill(2)
-            epoch_to = date.strftime("%s") + "000"
-
-            self.account.check_session()
-
-            while True:
-                try:
-                    # get initial page, retrieve first ASPX __VIEWSTATE
-                    response = self.account.session_get(
-                        f"https://www.usms.com.bn/SmartMeter/Report/UsageHistory?p={self.id}"
-                    )
-                    payload = self.account.get_aspx_state(response)
-
-                    # get daily page and second ASPX __VIEWSTATE
-                    response = self.account.session_post(
-                        f"https://www.usms.com.bn/SmartMeter/Report/UsageHistory?p={self.id}",
-                        data=payload,
-                    )
-                    payload = self.account.get_aspx_state(response)
-                    payload["cboType_VI"] = "1"
-                    payload["cboType"] = "Daily (Max 1 month)"
-                    payload["btnRefresh"] = "Search"
-                    payload["cboDateFrom"] = f"01/{mm}/{yyyy}"
-                    payload["cboDateTo"] = f"{dd}/{mm}/{yyyy}"
-                    payload["cboDateFrom$State"] = (
-                        "{" + f"&quot;rawValue&quot;:&quot;{epoch_from}&quot;" + "}"
-                    )
-                    payload["cboDateTo$State"] = (
-                        "{" + f"&quot;rawValue&quot;:&quot;{epoch_to}&quot;" + "}"
-                    )
-
-                    # get daily page and third ASPX __VIEWSTATE
-                    response = self.account.session_post(
-                        f"https://www.usms.com.bn/SmartMeter/Report/UsageHistory?p={self.id}",
-                        data=payload,
-                    )
-                    payload = self.account.get_aspx_state(response)
-                    payload["cboType_VI"] = "1"
-                    payload["cboType"] = "Daily (Max 1 month)"
-                    payload["btnRefresh"] = "Search"
-                    payload["cboDateFrom"] = f"01/{mm}/{yyyy}"
-                    payload["cboDateTo"] = f"{dd}/{mm}/{yyyy}"
-                    payload["cboDateFrom$State"] = (
-                        "{" + f"&quot;rawValue&quot;:&quot;{epoch_from}&quot;" + "}"
-                    )
-                    payload["cboDateTo$State"] = (
-                        "{" + f"&quot;rawValue&quot;:&quot;{epoch_to}&quot;" + "}"
-                    )
-
-                    # get final daily page
-                    response = self.account.session_post(
-                        f"https://www.usms.com.bn/SmartMeter/Report/UsageHistory?p={self.id}",
-                        data=payload,
-                    )
-                    soup = BeautifulSoup(response.content, "html.parser")
-
-                    # check page is not returning error
-                    if soup.find(id="pcErr_lblErrMsg") is None:
-                        raise ConnectionResetError("Session has probably expired.")
-
-                    if soup.find(id="pcErr_lblErrMsg").text != "":
-                        raise Exception(soup.find(id="pcErr_lblErrMsg").text)
-
-                    table = soup.find("table", id="ASPxPageControl1_grid_DXMainTable")
-                    daily_consumptions = {}
-
-                    for row in table.find_all("tr", class_="dxgvDataRow"):
-                        day = int(row.find_all("td")[0].text.split("/")[0])
-                        consumption = float(row.find_all("td")[1].text)
-
-                        daily_consumptions[day] = consumption
-
-                    _LOGGER.debug(f"Retrieved consumption info for month of: {date}")
-                except ConnectionResetError as error:
-                    _LOGGER.error(error)
-                    self.account.check_session()
-                except Exception as error:
-                    _LOGGER.error(error)
-                    raise Exception(error)
-                else:
-                    break
-
-            return daily_consumptions
-
-        def get_total_day_consumption(self, date: datetime) -> float:
-            """Returns the total unit consumption for a given day"""
-
-            hourly_consumptions = self.get_hourly_consumptions(date)
-
-            total_consumption = 0
-            for hour, consumption in hourly_consumptions.items():
-                total_consumption += consumption
-
-            return round(total_consumption, 3)
-
-        def get_total_month_consumption(self, date: datetime) -> float:
-            """Returns the total unit consumption for a given month."""
-
-            daily_consumptions = self.get_daily_consumptions(date)
-
-            total_consumption = 0
-            for day, consumption in daily_consumptions.items():
-                total_consumption += consumption
-
-            return round(total_consumption, 3)
-
-        def get_consumption(self, date: datetime) -> float:
-            """Returns the unit consumption for a given hour."""
-
-            hourly_consumptions = self.get_hourly_consumptions(date)
-            consumption = hourly_consumptions.get(date.hour, 0.0)
-
-            return consumption
-
-        def get_last_consumption(self) -> float:
-            """Returns the unit consumption for the last hour."""
-
-            date = datetime.now()
-            consumption = self.get_consumption(date)
-
-            if consumption == 0.0:
-                _LOGGER.warning(f"No consumption recorded yet for hour {date.hour}")
-
-            return consumption
-
-        def get_total_month_cost(self, date: datetime) -> float:
-            """Returns the total cost for a given month."""
-
-            total_consumption = self.get_total_month_consumption(date)
-            total_cost = calculate_cost(total_consumption, self.type)
-
-            return round(total_cost, 2)
-
-        def calculate_cost(self, consumption: float, type="") -> float:
-            """Calculates and returns the cost for given unit consumption, according to the tariff"""
-
-            if type == "":
-                type = self.type
-
-            cost = 0.0
-            for tier in self.TARIFFS.get(self.type):
-                lower_bound = tier[0]
-                upper_bound = tier[1]
-                cost_per_unit = tier[2]
-
-                bound_range = upper_bound - lower_bound + 1
-
-                if consumption <= bound_range:
-                    cost += consumption * cost_per_unit
-                    break
-                else:
-                    consumption -= bound_range
-                    cost += bound_range * cost_per_unit
-
-            return round(cost, 2)
-
-        def calculate_unit(self, cost: float, type="") -> float:
-            """Calculates and returns the unit received for the cost paid, according to the tariff"""
-
-            if type == "":
-                type = self.type
-
-            unit = 0.0
-            for tier in self.TARIFFS.get(self.type):
-                lower_bound = tier[0]
-                upper_bound = tier[1]
-                cost_per_unit = tier[2]
-
-                bound_range = upper_bound - lower_bound + 1
-                bound_cost = bound_range * cost_per_unit
-
-                if cost <= bound_cost:
-                    unit += cost / cost_per_unit
-                else:
-                    cost -= bound_cost
-                    unit += bound_range
-
-            return round(unit, 2)
-
-        def get_remaining_unit(self) -> float:
-            """Returns the last recorded unit for the meter."""
-
-            return self.remaining_unit
-
-        def get_remaining_credit(self) -> float:
-            """Returns the last recorded credit for the meter."""
-
-            return self.remaining_credit
-
-        def get_last_updated(self) -> datetime:
-            """Returns the last update time for the meter."""
-
-            return self.last_update
-
-        def is_active(self) -> bool:
-            """Returns True if the meter status is active."""
-
-            return self.status == "ACTIVE"
-
-        def get_unit(self) -> str:
-            """Returns the unit for this meter type"""
-
-            return self.UNITS[self.type]
-
-        def get_no(self) -> str:
-            """Returns this meter's meter no"""
-
-            return self.no
-
-        def get_type(self) -> str:
-            """Returns this meter's type (Electricity or Water)"""
-
-            return self.type
+        return False

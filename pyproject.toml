@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "usms"
-version = "0.0.1"
+version = "0.2.0"
 dependencies = [
-  "beautifulsoup4",
-  "requests",
+  "httpx",
+  "lxml",
 ]
 authors = [
   { name="AZ", email="102905929+azsaurr@users.noreply.github.com" },
