@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-l", "--log", default="info")
+    parser.add_argument("-l", "--log", default="warning")
 
     parser.add_argument("-u", "--username", required=True)
     parser.add_argument("-p", "--password", required=True)
