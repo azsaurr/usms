@@ -242,7 +242,7 @@ class USMSMeter:
             now = datetime.now(tz=ZoneInfo("Asia/Brunei"))
             if (now - self.last_update).total_seconds() <= 3600:
                 _LOGGER.warning(
-                    f"Not enough time has passed since last update: {self.last_update}"
+                    f"Not enough time has passed since last update: {now - self.last_update}"
                 )
                 return False
 
@@ -261,7 +261,7 @@ class USMSMeter:
         response_html = lxml.html.fromstring(response.content)
 
         # checks for error in retrieving page
-        if not response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]"""):
+        if response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]""") is None:
             _LOGGER.error(f"Error retrieving updates for {self.type} meter {self.no}")
             return False
 
