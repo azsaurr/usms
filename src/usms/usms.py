@@ -239,7 +239,7 @@ class USMSMeter:
         i.e. no new meter update available yet
         """
         if not force:
-            now = datetime.now(tz=ZoneInfo("Asia/Brunei"))
+            now = datetime.now(tz=self.TIMEZONE)
             if (now - self.last_update).total_seconds() <= 3600:
                 _LOGGER.warning(
                     f"Not enough time has passed since last update: {now - self.last_update}"
@@ -320,7 +320,11 @@ class USMSMeter:
         payload = {}
         payload["cboType_VI"] = "3"
         payload["cboType"] = "Hourly (Max 1 day)"
-        payload["btnRefresh"] = "Search"
+
+        self._account._session.get(f"/Report/UsageHistory?p={self.id}")
+        self._account._session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+
+        payload = {"btnRefresh": ["Search", ""]}
         payload["cboDateFrom"] = f"{dd}/{mm}/{yyyy}"
         payload["cboDateTo"] = f"{dd}/{mm}/{yyyy}"
         payload["cboDateFrom$State"] = (
@@ -329,12 +333,9 @@ class USMSMeter:
         payload["cboDateTo$State"] = (
             "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
         )
-
-        self._account._session.get(f"/Report/UsageHistory?p={self.id}")
-        self._account._session.post(f"/Report/UsageHistory?p={self.id}")
-        self._account._session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
         response = self._account._session.post(
-            f"/Report/UsageHistory?p={self.id}", data=payload
+            f"/Report/UsageHistory?p={self.id}",
+            data=payload,
         )
         response_html = lxml.html.fromstring(response.content)
 
