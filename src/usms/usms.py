@@ -304,7 +304,12 @@ class USMSMeter:
     def get_hourly_consumptions(self, date: datetime) -> dict:
         """Returns the hourly unit consumptions for a given day."""
 
-        now = datetime.now()
+        # make sure given date has timezone info
+        if not date.tzinfo:
+            _LOGGER.warning(f"Given date has no timezone, assuming {self.TIMEZONE}")
+            date = date.replace(tzinfo=self.TIMEZONE)
+
+        now = datetime.now(tz=self.TIMEZONE)
 
         # make sure the given day is not in the future
         if date > now:
@@ -354,6 +359,29 @@ class USMSMeter:
             row = row.findall(".//td")
 
             hour = int(row[0].text_content())
+
+            if hour < 24:
+                hour = datetime(
+                    date.year,
+                    date.month,
+                    date.day,
+                    hour,
+                    0,
+                    0,
+                    tzinfo=self.TIMEZONE,
+                )
+            else:
+                hour = datetime(
+                    date.year,
+                    date.month,
+                    date.day,
+                    23,
+                    0,
+                    0,
+                    tzinfo=self.TIMEZONE,
+                )
+                hour = hour + timedelta(hours=1)
+
             consumption = float(row[1].text_content())
 
             hourly_consumptions[hour] = consumption
@@ -364,14 +392,27 @@ class USMSMeter:
     def get_daily_consumptions(self, date: datetime) -> dict:
         """Returns the daily unit consumptions for a given month."""
 
-        now = datetime.now()
+        # make sure given date has timezone info
+        if not date.tzinfo:
+            _LOGGER.warning(f"Given date has no timezone, assuming {self.TIMEZONE}")
+            date = date.replace(tzinfo=self.TIMEZONE)
+
+        now = datetime.now(tz=self.TIMEZONE)
 
         # make sure the given day is not in the future
         if date > now:
             _LOGGER.error(f"Given date {date} is in the future!")
             raise Exception(f"Given date {date} is in the future!")
 
-        date_from = datetime(date.year, date.month, 1, 8, 0, 0, tzinfo=self.TIMEZONE)
+        date_from = datetime(
+            date.year,
+            date.month,
+            1,
+            8,
+            0,
+            0,
+            tzinfo=self.TIMEZONE,
+        )
         epoch_from = date_from.strftime("%s") + "000"
 
         # check if given month is still ongoing
@@ -425,6 +466,16 @@ class USMSMeter:
             row = row.findall(".//td")
 
             day = int(row[0].text_content().split("/")[0])
+            day = datetime(
+                date.year,
+                date.month,
+                day,
+                0,
+                0,
+                0,
+                tzinfo=self.TIMEZONE,
+            )
+
             consumption = float(row[1].text_content())
 
             daily_consumptions[day] = consumption
@@ -434,6 +485,11 @@ class USMSMeter:
 
     def get_total_day_consumption(self, date: datetime) -> float:
         """Returns the total unit consumption for a given day"""
+
+        # make sure given date has timezone info
+        if not date.tzinfo:
+            _LOGGER.warning(f"Given date has no timezone, assuming {self.TIMEZONE}")
+            date = date.replace(tzinfo=self.TIMEZONE)
 
         hourly_consumptions = self.get_hourly_consumptions(date)
 
@@ -446,6 +502,11 @@ class USMSMeter:
     def get_total_month_consumption(self, date: datetime) -> float:
         """Returns the total unit consumption for a given month."""
 
+        # make sure given date has timezone info
+        if not date.tzinfo:
+            _LOGGER.warning(f"Given date has no timezone, assuming {self.TIMEZONE}")
+            date = date.replace(tzinfo=self.TIMEZONE)
+
         daily_consumptions = self.get_daily_consumptions(date)
 
         total_consumption = 0
@@ -454,27 +515,48 @@ class USMSMeter:
 
         return round(total_consumption, 3)
 
-    def get_consumption(self, date: datetime) -> float:
+    def get_hourly_consumption(self, date: datetime) -> float | None:
         """Returns the unit consumption for a given hour."""
 
+        # make sure given date has timezone info
+        if not date.tzinfo:
+            _LOGGER.warning(f"Given date has no timezone, assuming {self.TIMEZONE}")
+            date = date.replace(tzinfo=self.TIMEZONE)
+
+        date = datetime(
+            date.year,
+            date.month,
+            date.day,
+            date.hour,
+            0,
+            0,
+            tzinfo=self.TIMEZONE,
+        )
+
         hourly_consumptions = self.get_hourly_consumptions(date)
-        consumption = hourly_consumptions.get(date.hour, 0.0)
+        consumption = hourly_consumptions.get(date, None)
+
+        if consumption is None:
+            _LOGGER.warning(f"No consumption recorded yet for {date}")
+            return
 
         return consumption
 
-    def get_last_consumption(self) -> float:
+    def get_last_consumption(self) -> float | None:
         """Returns the unit consumption for the last hour."""
 
-        date = datetime.now()
-        consumption = self.get_consumption(date)
-
-        if consumption == 0.0:
-            _LOGGER.warning(f"No consumption recorded yet for hour {date.hour}")
+        date = datetime.now(tz=self.TIMEZONE)
+        consumption = self.get_hourly_consumption(date)
 
         return consumption
 
     def get_total_month_cost(self, date: datetime) -> float:
         """Returns the total cost for a given month."""
+
+        # make sure given date has timezone info
+        if not date.tzinfo:
+            _LOGGER.warning(f"Given date has no timezone, assuming {self.TIMEZONE}")
+            date = date.replace(tzinfo=self.TIMEZONE)
 
         total_consumption = self.get_total_month_consumption(date)
         total_cost = self.calculate_cost(total_consumption, self.type)
