@@ -66,7 +66,7 @@ class USMSAccount:
         for meter in self.meters:
             if meter.id == meter_no or meter.no == meter_no:
                 return meter
-        raise ValueError(f"Meter {meter_no} does not exist under this account.")
+        raise USMSMeterNumberError(meter_no)
 
 
 class USMSMeter:
@@ -118,7 +118,7 @@ class USMSMeter:
 
         self.initialize()
 
-    def initialize(self) -> None:
+    def initialize(self, retry=True) -> None:
         """Retrieves initial USMS Meter attributes."""
 
         # build payload
@@ -131,13 +131,28 @@ class USMSMeter:
         payload["__EVENTARGUMENT"] = f"NCLK|{self._node_no}"
         payload["__EVENTTARGET"] = "ASPxPanel1$ASPxTreeView1"
 
-        self._account._session.get("/AccountInfo")
-        response = self._account._session.post("/AccountInfo", data=payload)
-        response_html = lxml.html.fromstring(response.content)
+        while True:
+            try:
+                self._account._session.get("/AccountInfo")
+                response = self._account._session.post("/AccountInfo", data=payload)
+                response_html = lxml.html.fromstring(response.content)
 
-        # checks for error in retrieving page
-        if response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]""") is None:
-            raise Exception(f"Error initializing {self.type} meter {self.no}")
+                # checks for error in retrieving page
+                if (
+                    response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]""")
+                    is None
+                ):
+                    raise USMSPageResponseError()
+            except USMSPageResponseError:
+                _LOGGER.error(error)
+                if not retry:
+                    raise USMSPageResponseError()
+            except Exception as error:
+                _LOGGER.error(error)
+                if not retry:
+                    raise Exception(error)
+            else:
+                break
 
         self.address = (
             response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]""")
@@ -313,8 +328,7 @@ class USMSMeter:
 
         # make sure the given day is not in the future
         if date > now:
-            _LOGGER.error(f"Given date {date} is in the future!")
-            raise Exception(f"Given date {date} is in the future!")
+            raise USMSFutureDateError(date)
 
         yyyy = date.year
         mm = str(date.month).zfill(2)
@@ -347,7 +361,9 @@ class USMSMeter:
         error_message = response_html.find(
             """.//span[@id="pcErr_lblErrMsg"]"""
         ).text_content()
-        if error_message:
+        if error_message == "consumption history not found.":
+            raise USMSConsumptionHistoryNotFoundError()
+        elif error_message:
             raise Exception(error_message)
 
         table = response_html.find(
@@ -401,8 +417,7 @@ class USMSMeter:
 
         # make sure the given day is not in the future
         if date > now:
-            _LOGGER.error(f"Given date {date} is in the future!")
-            raise Exception(f"Given date {date} is in the future!")
+            raise USMSFutureDateError(date)
 
         date_from = datetime(
             date.year,
@@ -454,7 +469,9 @@ class USMSMeter:
         error_message = response_html.find(
             """.//span[@id="pcErr_lblErrMsg"]"""
         ).text_content()
-        if error_message:
+        if error_message == "consumption history not found.":
+            raise USMSConsumptionHistoryNotFoundError()
+        elif error_message:
             raise Exception(error_message)
 
         table = response_html.find(
@@ -563,14 +580,14 @@ class USMSMeter:
 
         return round(total_cost, 2)
 
-    def calculate_cost(self, consumption: float, type="") -> float:
+    def calculate_cost(self, consumption: float, meter_type: str = "") -> float:
         """Calculates and returns the cost for given unit consumption, according to the tariff"""
 
-        if type == "":
-            type = self.type
+        if meter_type == "":
+            meter_type = self.type
 
         cost = 0.0
-        for tier in self.TARIFFS.get(self.type):
+        for tier in self.TARIFFS.get(meter_type):
             lower_bound = tier[0]
             upper_bound = tier[1]
             cost_per_unit = tier[2]
@@ -586,14 +603,14 @@ class USMSMeter:
 
         return round(cost, 2)
 
-    def calculate_unit(self, cost: float, type="") -> float:
+    def calculate_unit(self, cost: float, meter_type: str = "") -> float:
         """Calculates and returns the unit received for the cost paid, according to the tariff"""
 
-        if type == "":
-            type = self.type
+        if meter_type == "":
+            meter_type = self.type
 
         unit = 0.0
-        for tier in self.TARIFFS.get(self.type):
+        for tier in self.TARIFFS.get(meter_type):
             lower_bound = tier[0]
             upper_bound = tier[1]
             cost_per_unit = tier[2]
@@ -715,7 +732,7 @@ class USMSAuth(httpx.Auth):
             error_message = response_html.find(""".//*[@id="pcErr_lblErrMsg"]""")
             if error_message:
                 _LOGGER.error(error_message.text_content())
-                raise Exception(error_message.text_content())
+                raise USMSLoginError(error_message.text_content())
 
             request.cookies = response.cookies
             session_id = request.cookies["ASP.NET_SessionId"]
@@ -751,3 +768,43 @@ class USMSAuth(httpx.Auth):
             return True
 
         return False
+
+
+class USMSMeterNumberError(Exception):
+    """Exception raised for when invalid meter number is given."""
+
+    def __init__(self, meter_no="is"):
+        self.message = f"Meter {meter_no} not found."
+        super().__init__(self.message)
+
+
+class USMSLoginError(Exception):
+    """Exception raised for when unable to login."""
+
+    def __init__(self, message="Invalid login."):
+        self.message = message
+        super().__init__(self.message)
+
+
+class USMSPageResponseError(Exception):
+    """Exception raised for when error during page retrieval."""
+
+    def __init__(self, page_url="USMS page"):
+        self.message = f"Response from {page_url} was not expected."
+        super().__init__(self.message)
+
+
+class USMSFutureDateError(Exception):
+    """Exception raised for when future date is given."""
+
+    def __init__(self, given_date="Given date"):
+        self.message = f"{given_date} is in the future."
+        super().__init__(self.message)
+
+
+class USMSConsumptionHistoryNotFoundError(Exception):
+    """Exception raised for when no consumption history can be retrieved."""
+
+    def __init__(self, message="Consumption history not found."):
+        self.message = message
+        super().__init__(self.message)
