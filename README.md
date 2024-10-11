@@ -1,24 +1,23 @@
 # USMS
+
 An unofficial Python library to interface with your [USMS](https://www.usms.com.bn/smartmeter/about.html) account and smart meters.
-
-
 
 ## Getting Started
 
-### Prerequisites
+### Pre-requisites
 
 * Python >= 3.8
 * pip
 
 ### Dependencies
 
-* httpx
-* lxml
+* [httpx](https://www.python-httpx.org/)
+* [lxml](https://lxml.de/)
 
 ### Installation
 
 ```sh
-pip install usms
+python -m pip install usms
 ```
 
 ### Quickstart
@@ -26,7 +25,8 @@ pip install usms
 ```sh
 python -m usms --help
 ```
-```
+
+```sh
 usage: __main__.py [-h] [-l LOG] -u USERNAME -p PASSWORD [-m METER] [--unit] [--consumption] [--credit]
 
 options:
@@ -43,9 +43,8 @@ options:
 > [!NOTE]
 > The `username` parameter is the login ID that you use to log-in on the USMS website/app, i.e. your IC Number.
 
-
-
 As an example, you can use the following command to get the current remaining unit:
+
 ```sh
 python -m usms -u <ic_number> -p <password> -m <meter> --unit
 ```
@@ -96,25 +95,19 @@ date = date.replace(month=date.month-1)
 print(meter.get_total_month_cost(date))
 ```
 
-
-
 ## To-Do
 
-- [X] Publish package to PyPI
-- [X] Improve README
-- [ ] Support for water meter
-- [ ] Support for commercial/corporate accounts
-
-
+* [X] Publish package to PyPI
+* [X] Improve README
+* [ ] Support for water meter
+* [ ] Support for commercial/corporate accounts
 
 ## License
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
-
-
 ## Acknowledgments
 
-* []() requests
-* []() BeautifulSoup
-* []() USMS
+* [USMS](https://www.usms.com.bn/smartmeter/about.html)
+* [httpx](https://www.python-httpx.org/), used to make HTTP requests
+* [lxml](https://lxml.de/), used to parse HTML responses)
