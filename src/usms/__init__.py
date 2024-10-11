@@ -1,3 +1,3 @@
-from .usms import USMSAccount
+from .usms import *
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
