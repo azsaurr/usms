@@ -143,7 +143,7 @@ class USMSMeter:
                     is None
                 ):
                     raise USMSPageResponseError()
-            except USMSPageResponseError:
+            except USMSPageResponseError as error:
                 _LOGGER.error(error)
                 if not retry:
                     raise USMSPageResponseError()
