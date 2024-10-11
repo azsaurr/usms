@@ -3,7 +3,6 @@ import httpx
 import logging
 import lxml.html
 import typing
-import urllib.parse
 
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -32,7 +31,7 @@ class USMSAccount:
     def initialize(self) -> None:
         """Retrieves initial USMS Account attributes."""
 
-        _LOGGER.debug(f"Initializing account")
+        _LOGGER.debug("Initializing account")
 
         response = self._session.get("/AccountInfo")
         response_html = lxml.html.fromstring(response.content)
