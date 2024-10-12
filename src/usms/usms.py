@@ -131,33 +131,21 @@ class USMSMeter:
         payload["__EVENTTARGET"] = "ASPxPanel1$ASPxTreeView1"
 
         while True:
-            try:
-                self._account._session.get("/AccountInfo")
-                response = self._account._session.post("/AccountInfo", data=payload)
-                response_html = lxml.html.fromstring(response.content)
+            self._account._session.get("/AccountInfo")
+            response = self._account._session.post("/AccountInfo", data=payload)
+            response_html = lxml.html.fromstring(response.content)
 
-                # checks for error in retrieving page
-                if (
-                    response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]""")
-                    is None
-                ):
-                    raise USMSPageResponseError()
-            except USMSPageResponseError as error:
-                _LOGGER.error(error)
-                if not retry:
-                    raise USMSPageResponseError()
-            except Exception as error:
-                _LOGGER.error(error)
-                if not retry:
-                    raise Exception(error)
+            address = response_html.find(
+                """.//span[@id="ASPxFormLayout1_lblAddress"]"""
+            )
+
+            # checks for error in retrieving page
+            if address is None and not retry:
+                raise USMSPageResponseError()
             else:
                 break
 
-        self.address = (
-            response_html.find(""".//span[@id="ASPxFormLayout1_lblAddress"]""")
-            .text_content()
-            .strip()
-        )
+        self.address = address.text_content().strip()
         self.kampong = (
             response_html.find(""".//span[@id="ASPxFormLayout1_lblKampong"]""")
             .text_content()
@@ -279,12 +267,17 @@ class USMSMeter:
             _LOGGER.error(f"Error retrieving updates for {self.type} meter {self.no}")
             return False
 
-        self.remaining_unit = (
+        remaining_unit = (
             response_html.find(""".//span[@id="ASPxFormLayout1_lblRemainingUnit"]""")
             .text_content()
             .strip()
+            .split()[0]
+            .replace(",", "")
         )
-        self.remaining_unit = float(self.remaining_unit.split()[0].replace(",", ""))
+        if "-" in remaining_unit:
+            _LOGGER.error(f"Updates for {self.type} meter {self.no} not available.")
+            return False
+        self.remaining_unit = float(remaining_unit)
 
         self.remaining_credit = (
             response_html.find(""".//span[@id="ASPxFormLayout1_lblCurrentBalance"]""")
