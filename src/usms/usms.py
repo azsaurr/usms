@@ -62,10 +62,21 @@ class USMSAccount:
         _LOGGER.debug(f"Initialized account {self.reg_no} {self.name}")
 
     def get_meter(self, meter_no: str):
+        """Returns a USMSMeter object, otherwise raise error."""
         for meter in self.meters:
             if meter.id == meter_no or meter.no == meter_no:
                 return meter
         raise USMSMeterNumberError(meter_no)
+
+    def get_latest_update(self):
+        """Returns the newest update time for any meter."""
+        latest_update = datetime.min.replace(tzinfo=USMSMeter.TIMEZONE)
+
+        for meter in self.meters:
+            last_update = meter.get_last_updated()
+            latest_update = max(latest_update, last_update)
+
+        return latest_update
 
 
 class USMSMeter:
@@ -655,6 +666,8 @@ class USMSMeter:
 
 
 class USMSClient(httpx.Client):
+    """Custom implementation of authentication for USMS."""
+
     def __init__(self, username: str, password: str) -> None:
         super().__init__()
 
