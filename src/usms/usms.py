@@ -325,7 +325,7 @@ class USMSMeter:
         yyyy = date.year
         mm = str(date.month).zfill(2)
         dd = str(date.day).zfill(2)
-        epoch = date.strftime("%s") + "000"
+        epoch = date.replace(tzinfo=ZoneInfo("UTC")).timestamp() * 1000
 
         # build payload
         payload = {}
@@ -420,7 +420,7 @@ class USMSMeter:
             0,
             tzinfo=self.TIMEZONE,
         )
-        epoch_from = date_from.strftime("%s") + "000"
+        epoch_from = date_from.replace(tzinfo=ZoneInfo("UTC")).timestamp() * 1000
 
         # check if given month is still ongoing
         if date.year == now.year and date.month == now.month:
@@ -434,7 +434,7 @@ class USMSMeter:
         yyyy = date.year
         mm = str(date.month).zfill(2)
         dd = str(date.day).zfill(2)
-        epoch_to = date.strftime("%s") + "000"
+        epoch_to = date.replace(tzinfo=ZoneInfo("UTC")).timestamp() * 1000
 
         # build payload
         payload = {}
