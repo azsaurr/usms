@@ -78,6 +78,11 @@ class USMSAccount:
 
         return latest_update
 
+    def log_out(self):
+        """Logs out account from the session."""
+        self._session.get("/ResLogin")
+        self._session.cookies = {}
+
 
 class USMSMeter:
     """Represents a USMS meter under an account."""
