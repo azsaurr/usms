@@ -1,0 +1,12 @@
+_commit: v1.5.1
+_src_path: gh:superlinear-ai/substrate
+author_email: 102905929+azsaurr@users.noreply.github.com
+author_name: AZ
+project_description: An unofficial Python library to interface with your USMS account and smart meters.
+project_name: usms
+project_type: package
+project_url: https://github.com/azsaurr/usms
+python_version: '3.10'
+typing: strict
+with_conventional_commits: true
+with_typer_cli: false
