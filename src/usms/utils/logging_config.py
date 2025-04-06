@@ -15,9 +15,7 @@ logger = logging.getLogger("usms")
 logger.setLevel(logging.INFO)  # Default to DEBUG level
 
 # Log format
-LOG_FORMAT = (
-    "[%(asctime)s] [%(levelname)-8s] [%(module)s.%(funcName)s:%(lineno)d] - %(message)s"
-)
+LOG_FORMAT = "[%(asctime)s] [%(levelname)-8s] [%(module)s.%(funcName)s:%(lineno)d] - %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 formatter = logging.Formatter(LOG_FORMAT, DATE_FORMAT)
 
