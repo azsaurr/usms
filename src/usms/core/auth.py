@@ -62,7 +62,7 @@ class USMSAuth(httpx.Auth):
             # Handle authentication errors
             response_html = lxml.html.fromstring(response.content)
             error_message = response_html.find(""".//*[@id="pcErr_lblErrMsg"]""")
-            if error_message:
+            if error_message is not None:
                 logger.error(error_message.text_content())
                 raise USMSLoginError(error_message.text_content())
 
