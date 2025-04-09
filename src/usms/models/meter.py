@@ -440,18 +440,41 @@ class USMSMeter:
         logger.info(f"[{self.no}] Meter is NOT due for an update")
         return False
 
-    def refresh_data(self) -> None:
+    def refresh_data(self) -> bool:
         """Fetch new data and update the meter info."""
         logger.info(f"[{self.no}] Checking for updates")
 
-        new_meter = USMSMeter(self._account, self._node_no)
+        try:
+            # Initialize a temporary meter to fetch fresh details in one call
+            temp_meter = USMSMeter(self._account, self._node_no)
+        except Exception as error:  # noqa: BLE001
+            logger.warning(f"[{self.no}] Failed to fetch update with error: {error}")
+            return False
+
         self.last_refresh = datetime.now(tz=BRUNEI_TZ)
 
-        if new_meter.last_update > self.last_update:
+        if temp_meter.last_update > self.last_update:
             logger.info(f"[{self.no}] New updates found")
-            self.last_update = new_meter.last_update
-        else:
-            logger.info(f"[{self.no}] No new updates found")
+            self.last_update = temp_meter.last_update
+            self.remaining_credit = temp_meter.remaining_credit
+            self.remaining_unit = temp_meter.remaining_unit
+
+            return True
+
+        logger.info(f"[{self.no}] No new updates found")
+        return False
+
+    def check_update_and_refresh(self) -> bool:
+        """Refresh data if an update is due, then return True if update successful."""
+        try:
+            if self.is_update_due():
+                return self.refresh_data()
+        except Exception as error:  # noqa: BLE001
+            logger.warning(f"[{self.no}] Failed to fetch update with error: {error}")
+            return False
+
+        # Update not dued, data not refreshed
+        return False
 
     def get_remaining_unit(self) -> float:
         """Return the last recorded unit for the meter."""
@@ -463,9 +486,6 @@ class USMSMeter:
 
     def get_last_updated(self) -> datetime:
         """Return the last update time for the meter."""
-        if self.is_update_due():
-            self.refresh_data()
-
         return self.last_update
 
     def is_active(self) -> bool:
@@ -477,7 +497,7 @@ class USMSMeter:
         for meter_type, meter_unit in UNITS.items():
             if meter_type.upper() in self.type.upper():
                 return meter_unit
-        return None
+        return ""
 
     def get_no(self) -> str:
         """Return this meter's meter no."""
