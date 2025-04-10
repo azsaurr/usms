@@ -103,7 +103,7 @@ type = "simple"
     pdoc
       --docformat $docformat
       --output-directory $outputdirectory
-      my_package
+      usms
     """
 
     [[tool.poe.tasks.docs.args]]
