@@ -9,6 +9,7 @@ manage associated meters and handle user sessions.
 
 from datetime import datetime
 
+import httpx
 import lxml.html
 
 from usms.config.constants import BRUNEI_TZ
@@ -105,7 +106,52 @@ class USMSAccount:
 
         return latest_update
 
-    def log_out(self) -> None:
+    def log_out(self) -> bool:
         """Log the user out of the USMS session by clearing session cookies."""
+        logger.debug(f"[{self.username}] Logging out {self.username}...")
         self.session.get("/ResLogin")
         self.session.cookies = {}
+
+        if not self.is_authenticated():
+            logger.debug(f"[{self.username}] Logged out")
+            return True
+
+        logger.debug(f"[{self.username}] Log out fail")
+        return False
+
+    def log_in(self) -> bool:
+        """Log in the user."""
+        logger.debug(f"[{self.username}] Logging in {self.username}...")
+
+        self.session.get("/AccountInfo")
+
+        if self.is_authenticated():
+            logger.debug(f"[{self.username}] Logged in")
+            return True
+
+        logger.debug(f"[{self.username}] Log in fail")
+        return False
+
+    def is_authenticated(self) -> bool:
+        """
+        Check if the current session is authenticated.
+
+        Check if the current session is authenticated
+        by sending a request without retrying or triggering auth logic.
+        """
+        logger.debug(f"[{self.username}] Checking if authenticated")
+        try:
+            # Clone the cookies manually, but use a plain httpx client
+            with httpx.Client(cookies=self.session.cookies) as temp_client:
+                response = temp_client.get(f"{USMSClient.BASE_URL}/AccountInfo")
+                is_expired = self.session.auth.is_expired(response)
+
+                if is_expired:
+                    logger.debug(f"[{self.username}] Account is NOT authenticated")
+                else:
+                    logger.debug(f"[{self.username}] Account is authenticated")
+
+                return not is_expired
+        except httpx.HTTPError as error:
+            logger.warning(f"[{self.username}] Login check failed: {error}")
+            return False
