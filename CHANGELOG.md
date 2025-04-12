@@ -1,3 +1,14 @@
+## v0.4.1 (2025-04-12)
+
+### Feat
+
+- **account**: add methods for logging in and check authentication status
+
+### Refactor
+
+- **meter**: rename functions and update docstrings for clarity
+- **meter**: more efficient lookup of meter consumption data
+
 ## v0.4.0 (2025-04-10)
 
 ### Feat
