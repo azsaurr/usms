@@ -550,16 +550,30 @@ class USMSMeter:
         logger.debug(f"[{self.no}] Cost for {date.year}-{date.month}: ${total_cost}")
         return total_cost
 
-    def get_last_n_month_total_consumption(self, n=0) -> float:
-        """Return the total unit consumption for last n month."""
+    def get_previous_n_month_total_consumption(self, n=0) -> float:
+        """
+        Return the total unit consumption for previous n month.
+
+        e.g.
+        n=0 : data for this month only
+        n=1 : data for previous month only
+        n=2 : data for previous 2 months only
+        """
         date = datetime.now(tz=BRUNEI_TZ)
         for _ in range(n):
             date = date.replace(day=1)
             date = date - timedelta(days=1)
         return self.get_total_month_consumption(date)
 
-    def get_last_n_month_total_cost(self, n=0) -> float:
-        """Return the total cost for last n month."""
+    def get_previous_n_month_total_cost(self, n=0) -> float:
+        """
+        Return the total cost for previous n month.
+
+        e.g.
+        n=0 : data for this month only
+        n=1 : data for previous month only
+        n=2 : data for previous 2 months only
+        """
         date = datetime.now(tz=BRUNEI_TZ)
         for _ in range(n):
             date = date.replace(day=1)
@@ -567,7 +581,14 @@ class USMSMeter:
         return self.get_total_month_cost(date)
 
     def get_last_n_days_hourly_consumptions(self, n=0) -> pd.Series:
-        """Return the hourly unit consumptions for the last n days."""
+        """
+        Return the hourly unit consumptions for the last n days accumulatively.
+
+        e.g.
+        n=0 : data for today
+        n=1 : data from yesterday until today
+        n=2 : data from 2 days ago until today
+        """
         last_n_days_hourly_consumptions = pd.Series(
             dtype=float,
             index=pd.DatetimeIndex([], tz=BRUNEI_TZ, freq="h"),
