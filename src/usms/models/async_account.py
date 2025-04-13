@@ -24,7 +24,7 @@ class AsyncUSMSAccount:
     and associated meters.
     """
 
-    session: None
+    session: AsyncUSMSClient
 
     """USMS Account class attributes."""
     reg_no: str
@@ -36,7 +36,9 @@ class AsyncUSMSAccount:
     def __init__(self, username: str, password: str) -> None:
         """Initialize a USMSAccount instance."""
         self.username = username
-        self.session = AsyncUSMSClient(username, password)
+        self.password = password
+
+        self.session = None
 
     async def initialize(self):
         """
@@ -46,6 +48,8 @@ class AsyncUSMSAccount:
         and retrieving account details.
         """
         logger.debug(f"[{self.username}] Initializing account {self.username}")
+        self.session = AsyncUSMSClient(self.username, self.password)
+        await self.session.initialize()
         await self.fetch_details()
         logger.debug(f"[{self.username}] Initialized account")
 
@@ -101,7 +105,7 @@ class AsyncUSMSAccount:
         await self.session.get("/ResLogin")
         self.session.cookies = {}
 
-        if not self.is_authenticated():
+        if not await self.is_authenticated():
             logger.debug(f"[{self.username}] Logged out")
             return True
 
@@ -112,7 +116,7 @@ class AsyncUSMSAccount:
         """Log in the user."""
         logger.debug(f"[{self.username}] Logging in {self.username}...")
 
-        self.session.get("/AccountInfo")
+        await self.session.get("/AccountInfo")
 
         if await self.is_authenticated():
             logger.debug(f"[{self.username}] Logged in")
@@ -129,18 +133,27 @@ class AsyncUSMSAccount:
         by sending a request without retrying or triggering auth logic.
         """
         logger.debug(f"[{self.username}] Checking if authenticated")
+        is_authenticated = False
         try:
-            # Clone the cookies manually, but use a plain httpx client
-            with httpx.AsyncClient(cookies=self.session.cookies) as temp_client:
-                response = await temp_client.get(f"{AsyncUSMSClient.BASE_URL}/AccountInfo")
-                is_expired = self.session.auth.is_expired(response)
+            # Temporarily disable the custom Auth
+            async_usms_auth = self.session.auth
+            self.session.auth = None  # disable custom auth temporarily
 
-                if is_expired:
-                    logger.debug(f"[{self.username}] Account is NOT authenticated")
-                else:
-                    logger.debug(f"[{self.username}] Account is authenticated")
+            # Build and send a raw request without auth logic
+            request = self.session.build_request("GET", f"{AsyncUSMSClient.BASE_URL}/AccountInfo")
+            response = await self.session.send(request, stream=False)
 
-                return not is_expired
+            # Now check manually using your own logic
+            is_authenticated = not async_usms_auth.is_expired(response)
+
+            if is_authenticated:
+                logger.debug(f"[{self.username}] Account is authenticated")
+            else:
+                logger.debug(f"[{self.username}] Account is NOT authenticated")
         except httpx.HTTPError as error:
             logger.warning(f"[{self.username}] Login check failed: {error}")
-            return False
+        finally:
+            # Restore the custom auth back
+            self.session.auth = async_usms_auth
+
+        return is_authenticated

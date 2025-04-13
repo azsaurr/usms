@@ -20,11 +20,17 @@ class AsyncUSMSClient(httpx.AsyncClient):
 
     def __init__(self, username: str, password: str, timeout: float = 30.0) -> None:
         """Initialize a USMSClient instance."""
+        self.username = username
+        self.password = password
+        self.timeout = timeout
+
+    async def initialize(self) -> None:
+        """Initialize a USMSClient instance."""
         super().__init__(
-            auth=AsyncUSMSAuth(username, password),
+            auth=AsyncUSMSAuth(self.username, self.password),
             base_url=self.BASE_URL,
             http2=True,
-            timeout=timeout,
+            timeout=self.timeout,
             event_hooks={"response": [self._update_asp_state]},
         )
         self._asp_state = {}
