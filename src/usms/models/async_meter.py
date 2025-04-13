@@ -23,10 +23,10 @@ from usms.exceptions.errors import (
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
-    from usms.models.account import USMSAccount
+    from usms.models.async_account import AsyncUSMSAccount
 
 
-class USMSMeter:
+class AsyncUSMSMeter:
     """
     Represents a USMS meter.
 
@@ -35,7 +35,7 @@ class USMSMeter:
     """
 
     """USMS Meter class attributes."""
-    _account: "USMSAccount"
+    _account: "AsyncUSMSAccount"
     _node_no: str
 
     address: str
@@ -63,16 +63,14 @@ class USMSMeter:
 
     update_interval: timedelta
 
-    def __init__(self, account: "USMSAccount", node_no: str) -> None:
+    def __init__(self, account: "AsyncUSMSAccount", node_no: str) -> None:
         """Initialize a USMSMeter instance."""
         self._account = account
         self._node_no = node_no
 
         self.last_refresh = None
 
-        self.initialize()
-
-    def initialize(self):
+    async def initialize(self):
         """
         Initialize a USMSMeter instance.
 
@@ -80,7 +78,7 @@ class USMSMeter:
         """
         logger.debug(f"[{self._account.username}] Initializing meter {self._node_no}")
 
-        self.fetch_details()
+        await self.fetch_details()
         self.last_refresh = self.last_update
         self.earliest_consumption_date = None
 
@@ -114,7 +112,7 @@ class USMSMeter:
 
         logger.debug(f"[{self._account.username}] Initialized meter {self._node_no}")
 
-    def fetch_details(self) -> None:
+    async def fetch_details(self) -> None:
         """
         Fetch and set meter details.
 
@@ -133,8 +131,8 @@ class USMSMeter:
         payload["__EVENTARGUMENT"] = f"NCLK|{self._node_no}"
         payload["__EVENTTARGET"] = "ASPxPanel1$ASPxTreeView1"
 
-        self._account.session.get("/AccountInfo")
-        response = self._account.session.post("/AccountInfo", data=payload)
+        await self._account.session.get("/AccountInfo")
+        response = await self._account.session.post("/AccountInfo", data=payload)
         response_html = lxml.html.fromstring(response.content)
 
         self.address = (
@@ -218,7 +216,7 @@ class USMSMeter:
 
         logger.debug(f"[{self.no}] Fetched {self.type} meter {self.no}")
 
-    def get_hourly_consumptions(self, date: datetime) -> pd.Series:  # noqa: C901, PLR0915
+    async def get_hourly_consumptions(self, date: datetime) -> pd.Series:  # noqa: C901, PLR0915
         """Return the hourly unit consumptions for a given day."""
         # Make sure given date has timezone info
         if not date.tzinfo:
@@ -263,15 +261,15 @@ class USMSMeter:
         payload["cboType_VI"] = "3"
         payload["cboType"] = "Hourly (Max 1 day)"
 
-        self._account.session.get(f"/Report/UsageHistory?p={self.id}")
-        self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        await self._account.session.get(f"/Report/UsageHistory?p={self.id}")
+        await self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
 
         payload = {"btnRefresh": ["Search", ""]}
         payload["cboDateFrom"] = f"{dd}/{mm}/{yyyy}"
         payload["cboDateTo"] = f"{dd}/{mm}/{yyyy}"
         payload["cboDateFrom$State"] = "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
         payload["cboDateTo$State"] = "{" + f"&quot;rawValue&quot;:&quot;{epoch}&quot;" + "}"
-        response = self._account.session.post(
+        response = await self._account.session.post(
             f"/Report/UsageHistory?p={self.id}",
             data=payload,
         )
@@ -342,7 +340,7 @@ class USMSMeter:
         logger.debug(f"[{self.no}] Fetched consumptions for: {date.date()}")
         return hourly_consumptions[self.get_unit()]
 
-    def get_daily_consumptions(self, date: datetime) -> pd.Series:  # noqa: PLR0915
+    async def get_daily_consumptions(self, date: datetime) -> pd.Series:  # noqa: PLR0915
         """Return the daily unit consumptions for a given month."""
         # Make sure given date has timezone info
         if not date.tzinfo:
@@ -418,10 +416,12 @@ class USMSMeter:
         payload["cboDateFrom$State"] = "{" + f"&quot;rawValue&quot;:&quot;{epoch_from}&quot;" + "}"
         payload["cboDateTo$State"] = "{" + f"&quot;rawValue&quot;:&quot;{epoch_to}&quot;" + "}"
 
-        self._account.session.get(f"/Report/UsageHistory?p={self.id}")
-        self._account.session.post(f"/Report/UsageHistory?p={self.id}")
-        self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
-        response = self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        await self._account.session.get(f"/Report/UsageHistory?p={self.id}")
+        await self._account.session.post(f"/Report/UsageHistory?p={self.id}")
+        await self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        response = await self._account.session.post(
+            f"/Report/UsageHistory?p={self.id}", data=payload
+        )
         response_html = lxml.html.fromstring(response.content)
 
         error_message = response_html.find(""".//span[@id="pcErr_lblErrMsg"]""").text_content()
@@ -476,9 +476,9 @@ class USMSMeter:
         logger.debug(f"[{self.no}] Fetched consumptions for: {date.year}-{date.month}")
         return daily_consumptions[self.get_unit()]
 
-    def get_total_day_consumption(self, date: datetime) -> float:
+    async def get_total_day_consumption(self, date: datetime) -> float:
         """Return the total unit consumption for a given day."""
-        hourly_consumptions = self.get_hourly_consumptions(date)
+        hourly_consumptions = await self.get_hourly_consumptions(date)
 
         if hourly_consumptions.empty:
             logger.debug(f"[{self.no}] No consumption calculated for {date.date()}")
@@ -491,9 +491,9 @@ class USMSMeter:
         )
         return total_consumption
 
-    def get_total_month_consumption(self, date: datetime) -> float:
+    async def get_total_month_consumption(self, date: datetime) -> float:
         """Return the total unit consumption for a given month."""
-        daily_consumptions = self.get_daily_consumptions(date)
+        daily_consumptions = await self.get_daily_consumptions(date)
 
         if daily_consumptions.empty:
             logger.debug(f"[{self.no}] No consumption calculated for {date.year}-{date.month}")
@@ -505,7 +505,7 @@ class USMSMeter:
         )
         return total_consumption
 
-    def get_hourly_consumption(self, date: datetime) -> float | None:
+    async def get_hourly_consumption(self, date: datetime) -> float | None:
         """Return the unit consumption for a single given hour."""
         date = datetime(
             date.year,
@@ -517,7 +517,7 @@ class USMSMeter:
             tzinfo=date.tzinfo,
         )
 
-        hourly_consumptions = self.get_hourly_consumptions(date)
+        hourly_consumptions = await self.get_hourly_consumptions(date)
 
         if hourly_consumptions.empty:
             logger.warning(f"[{self.no}] No consumption recorded yet for {date}")
@@ -527,15 +527,15 @@ class USMSMeter:
         logger.debug(f"[{self.no}] Consumption for {date}: {consumption} {self.get_unit()}")
         return consumption
 
-    def get_last_consumption(self) -> float | None:
+    async def get_last_consumption(self) -> float | None:
         """Return the unit consumption for the last hour."""
         now = datetime.now(tz=BRUNEI_TZ)
 
-        return self.get_hourly_consumption(now)
+        return await self.get_hourly_consumption(now)
 
-    def get_total_month_cost(self, date: datetime) -> float | None:
+    async def get_total_month_cost(self, date: datetime) -> float | None:
         """Return the total cost for a given month."""
-        total_consumption = self.get_total_month_consumption(date)
+        total_consumption = await self.get_total_month_consumption(date)
 
         tariff = None
         for meter_type, meter_tariff in TARIFFS.items():
@@ -549,7 +549,7 @@ class USMSMeter:
         logger.debug(f"[{self.no}] Cost for {date.year}-{date.month}: ${total_cost}")
         return total_cost
 
-    def get_previous_n_month_total_consumption(self, n=0) -> float:
+    async def get_previous_n_month_total_consumption(self, n=0) -> float:
         """
         Return the total unit consumption for previous n month.
 
@@ -562,9 +562,9 @@ class USMSMeter:
         for _ in range(n):
             date = date.replace(day=1)
             date = date - timedelta(days=1)
-        return self.get_total_month_consumption(date)
+        return await self.get_total_month_consumption(date)
 
-    def get_previous_n_month_total_cost(self, n=0) -> float:
+    async def get_previous_n_month_total_cost(self, n=0) -> float:
         """
         Return the total cost for previous n month.
 
@@ -577,9 +577,9 @@ class USMSMeter:
         for _ in range(n):
             date = date.replace(day=1)
             date = date - timedelta(days=1)
-        return self.get_total_month_cost(date)
+        return await self.get_total_month_cost(date)
 
-    def get_last_n_days_hourly_consumptions(self, n=0) -> pd.Series:
+    async def get_last_n_days_hourly_consumptions(self, n=0) -> pd.Series:
         """
         Return the hourly unit consumptions for the last n days accumulatively.
 
@@ -599,7 +599,7 @@ class USMSMeter:
         range_date = (upper_date - lower_date).days + 1
         for i in range(range_date):
             date = lower_date + timedelta(days=i)
-            hourly_consumptions = self.get_hourly_consumptions(date)
+            hourly_consumptions = await self.get_hourly_consumptions(date)
 
             if not hourly_consumptions.empty:
                 last_n_days_hourly_consumptions = hourly_consumptions.combine_first(
@@ -642,13 +642,14 @@ class USMSMeter:
         logger.info(f"[{self.no}] Meter is NOT due for an update")
         return False
 
-    def refresh_data(self) -> bool:
+    async def refresh_data(self) -> bool:
         """Fetch new data and update the meter info."""
         logger.info(f"[{self.no}] Checking for updates")
 
         try:
             # Initialize a temporary meter to fetch fresh details in one call
-            temp_meter = USMSMeter(self._account, self._node_no)
+            temp_meter = AsyncUSMSMeter(self._account, self._node_no)
+            await temp_meter.initialize()
         except Exception as error:  # noqa: BLE001
             logger.warning(f"[{self.no}] Failed to fetch update with error: {error}")
             return False
@@ -666,11 +667,11 @@ class USMSMeter:
         logger.info(f"[{self.no}] No new updates found")
         return False
 
-    def check_update_and_refresh(self) -> bool:
+    async def check_update_and_refresh(self) -> bool:
         """Refresh data if an update is due, then return True if update successful."""
         try:
             if self.is_update_due():
-                return self.refresh_data()
+                return await self.refresh_data()
         except Exception as error:  # noqa: BLE001
             logger.warning(f"[{self.no}] Failed to fetch update with error: {error}")
             return False
@@ -697,7 +698,7 @@ class USMSMeter:
     def get_unit(self) -> str:
         """Return the unit for this meter type."""
         for meter_type, meter_unit in UNITS.items():
-            if meter_type.upper() in self.type.upper():
+            if meter_type.upper() in self.get_type().upper():
                 return meter_unit
         return ""
 
@@ -709,23 +710,23 @@ class USMSMeter:
         """Return this meter's type (Electricity or Water)."""
         return self.type
 
-    def get_all_hourly_consumptions(self) -> pd.Series:
+    async def get_all_hourly_consumptions(self) -> pd.Series:
         """Get the hourly unit consumptions for all days and months."""
         logger.debug(f"[{self.no}] Getting all hourly consumptions")
 
         upper_date = datetime.now(tz=BRUNEI_TZ)
-        lower_date = self.find_earliest_consumption_date()
+        lower_date = await self.find_earliest_consumption_date()
         range_date = (upper_date - lower_date).days + 1
         for i in range(range_date):
             date = lower_date + timedelta(days=i)
-            self.get_hourly_consumptions(date)
+            await self.get_hourly_consumptions(date)
             logger.debug(
                 f"[{self.no}] Getting all hourly consumptions progress: {i} out of {range_date}, {i / range_date * 100}%"
             )
 
         return self.hourly_consumptions
 
-    def find_earliest_consumption_date(self) -> datetime:
+    async def find_earliest_consumption_date(self) -> datetime:
         """Determine the earliest date for which hourly consumption data is available."""
         if self.earliest_consumption_date is not None:
             return self.earliest_consumption_date
@@ -748,7 +749,7 @@ class USMSMeter:
         # Exponential backoff to find a missing date
         step = 1
         while True:
-            hourly_consumptions = self.get_hourly_consumptions(date)
+            hourly_consumptions = await self.get_hourly_consumptions(date)
 
             if not hourly_consumptions.empty:
                 step *= 2  # Exponentially increase step

@@ -10,13 +10,13 @@ manage associated meters and handle user sessions.
 import httpx
 import lxml.html
 
-from usms.core.client import USMSClient
+from usms.core.async_client import AsyncUSMSClient
 from usms.exceptions.errors import USMSMeterNumberError
-from usms.models.meter import USMSMeter
+from usms.models.async_meter import AsyncUSMSMeter
 from usms.utils.logging_config import logger
 
 
-class USMSAccount:
+class AsyncUSMSAccount:
     """
     Represents a USMS account.
 
@@ -36,11 +36,9 @@ class USMSAccount:
     def __init__(self, username: str, password: str) -> None:
         """Initialize a USMSAccount instance."""
         self.username = username
-        self.session = USMSClient(username, password)
+        self.session = AsyncUSMSClient(username, password)
 
-        self.initialize()
-
-    def initialize(self):
+    async def initialize(self):
         """
         Initialize a USMSAccount instance.
 
@@ -48,10 +46,10 @@ class USMSAccount:
         and retrieving account details.
         """
         logger.debug(f"[{self.username}] Initializing account {self.username}")
-        self.fetch_details()
+        await self.fetch_details()
         logger.debug(f"[{self.username}] Initialized account")
 
-    def fetch_details(self) -> None:
+    async def fetch_details(self) -> None:
         """
         Fetch and set account details.
 
@@ -60,7 +58,7 @@ class USMSAccount:
         """
         logger.debug(f"[{self.username}] Fetching account details")
 
-        response = self.session.get("/AccountInfo")
+        response = await self.session.get("/AccountInfo")
         response_html = lxml.html.fromstring(response.content)
 
         self.reg_no = response_html.find(
@@ -80,12 +78,13 @@ class USMSAccount:
         for x, lvl1 in enumerate(root.findall("./ul/li")):
             for y, lvl2 in enumerate(lvl1.findall("./ul/li")):
                 for z, _ in enumerate(lvl2.findall("./ul/li")):
-                    meter = USMSMeter(self, f"N{x}_{y}_{z}")
+                    meter = AsyncUSMSMeter(self, f"N{x}_{y}_{z}")
+                    await meter.initialize()
                     self.meters.append(meter)
 
         logger.debug(f"[{self.username}] Fetched account details: {self.name}")
 
-    def get_meter(self, meter_no: str | int) -> USMSMeter:
+    def get_meter(self, meter_no: str | int) -> AsyncUSMSMeter:
         """Retrieve a specific USMSMeter object by its ID or meter number."""
         if isinstance(meter_no, int):
             meter_no = str(meter_no)
@@ -96,10 +95,10 @@ class USMSAccount:
 
         raise USMSMeterNumberError(meter_no)
 
-    def log_out(self) -> bool:
+    async def log_out(self) -> bool:
         """Log the user out of the USMS session by clearing session cookies."""
         logger.debug(f"[{self.username}] Logging out {self.username}...")
-        self.session.get("/ResLogin")
+        await self.session.get("/ResLogin")
         self.session.cookies = {}
 
         if not self.is_authenticated():
@@ -109,20 +108,20 @@ class USMSAccount:
         logger.debug(f"[{self.username}] Log out fail")
         return False
 
-    def log_in(self) -> bool:
+    async def log_in(self) -> bool:
         """Log in the user."""
         logger.debug(f"[{self.username}] Logging in {self.username}...")
 
         self.session.get("/AccountInfo")
 
-        if self.is_authenticated():
+        if await self.is_authenticated():
             logger.debug(f"[{self.username}] Logged in")
             return True
 
         logger.debug(f"[{self.username}] Log in fail")
         return False
 
-    def is_authenticated(self) -> bool:
+    async def is_authenticated(self) -> bool:
         """
         Check if the current session is authenticated.
 
@@ -132,8 +131,8 @@ class USMSAccount:
         logger.debug(f"[{self.username}] Checking if authenticated")
         try:
             # Clone the cookies manually, but use a plain httpx client
-            with httpx.Client(cookies=self.session.cookies) as temp_client:
-                response = temp_client.get(f"{USMSClient.BASE_URL}/AccountInfo")
+            with httpx.AsyncClient(cookies=self.session.cookies) as temp_client:
+                response = await temp_client.get(f"{AsyncUSMSClient.BASE_URL}/AccountInfo")
                 is_expired = self.session.auth.is_expired(response)
 
                 if is_expired:
