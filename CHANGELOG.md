@@ -1,3 +1,9 @@
+## v0.5.0 (2025-04-13)
+
+### Feat
+
+- **async**: add initial async support
+
 ## v0.4.1 (2025-04-12)
 
 ### Feat
