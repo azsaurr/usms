@@ -6,7 +6,7 @@ customized especially for authenticating
 with USMS accounts.
 """
 
-import typing
+from collections.abc import Generator
 
 import httpx
 import lxml.html
@@ -28,9 +28,7 @@ class USMSAuth(httpx.Auth):
         self._username = username
         self._password = password
 
-    def sync_auth_flow(
-        self, request: httpx.Request
-    ) -> typing.Generator[httpx.Request, httpx.Response, None]:
+    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
         """Handle authentication and session renewal."""
         response = yield request
 
