@@ -4,8 +4,8 @@ from datetime import datetime
 
 import pandas as pd
 
-from usms.config.constants import BRUNEI_TZ
-from usms.exceptions.errors import USMSFutureDateError
+from usms.config.constants import BRUNEI_TZ, UNITS
+from usms.exceptions.errors import USMSFutureDateError, USMSInvalidParameterError
 from usms.utils.logging_config import logger
 
 
@@ -25,13 +25,20 @@ def sanitize_date(date: datetime) -> datetime:
 
 def new_consumptions_dataframe(unit: str, freq: str) -> pd.DataFrame:
     """Return an empty dataframe with proper datetime index and column name."""
+    # check for valid parameters
+    if unit not in UNITS.values():
+        raise USMSInvalidParameterError(unit, UNITS.values())
+
+    if freq not in ("h", "D"):
+        raise USMSInvalidParameterError(freq, ("h", "D"))
+
     new_dataframe = pd.DataFrame(
         dtype=float,
         columns=[unit, "last_checked"],
         index=pd.DatetimeIndex(
             [],
             tz=BRUNEI_TZ,
-            freq="h",
+            freq=freq,
         ),
     )
     new_dataframe["last_checked"] = pd.to_datetime(new_dataframe["last_checked"]).dt.tz_localize(

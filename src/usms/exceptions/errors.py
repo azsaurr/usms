@@ -55,3 +55,21 @@ class USMSConsumptionHistoryNotFoundError(Exception):
         """Initialize the exception."""
         self.message = message
         super().__init__(self.message)
+
+
+class USMSInvalidParameterError(Exception):
+    """Exception raised for when an invalid parameter is passed."""
+
+    def __init__(self, given: str, expected: str | list) -> None:
+        """Initialize the exception."""
+        self.message = f"Given {given}, expected {expected}."
+        super().__init__(self.message)
+
+
+class USMSNotInitializedError(Exception):
+    """Exception raised for when an operation is attempted on an unitialized object."""
+
+    def __init__(self, class_name: str) -> None:
+        """Initialize the exception."""
+        self.message = f"{class_name} must be initialized first."
+        super().__init__(self.message)
