@@ -5,6 +5,7 @@ import httpx
 from usms.core.client import AsyncUSMSClient
 from usms.services.account import BaseUSMSAccount
 from usms.services.async_.meter import AsyncUSMSMeter
+from usms.utils.decorators import requires_init
 from usms.utils.logging_config import logger
 
 
@@ -19,8 +20,11 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         self.session = AsyncUSMSClient(self.auth)
         await self.session.initialize()
         await self.fetch_info()
+
+        self._initialized = True
         logger.debug(f"[{self.username}] Initialized account")
 
+    @requires_init
     async def initialize_meters(self):
         """Initialize all USMSMeters under this account."""
         for meter in self.meters:
@@ -49,6 +53,7 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         for meter_node_no in data.get("meters", []):
             self.meters.append(AsyncUSMSMeter(self, meter_node_no))
 
+    @requires_init
     async def log_out(self) -> bool:
         """Log the user out of the USMS session by clearing session cookies."""
         logger.debug(f"[{self.username}] Logging out {self.username}...")
@@ -63,6 +68,7 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         logger.debug(f"[{self.username}] Log out fail")
         return False
 
+    @requires_init
     async def log_in(self) -> bool:
         """Log in the user."""
         logger.debug(f"[{self.username}] Logging in {self.username}...")
@@ -76,6 +82,7 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         logger.debug(f"[{self.username}] Log in fail")
         return False
 
+    @requires_init
     async def is_authenticated(self) -> bool:
         """
         Check if the current session is authenticated.

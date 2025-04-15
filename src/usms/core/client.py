@@ -12,6 +12,7 @@ import httpx
 import lxml.html
 
 from usms.core.auth import USMSAuth
+from usms.utils.decorators import requires_init
 from usms.utils.logging_config import logger
 
 
@@ -25,6 +26,8 @@ class BaseUSMSClient(ABC):
     def __init__(self, auth: USMSAuth) -> None:
         self.auth = auth
 
+        self._initialized = False
+
     def initialize(self) -> None:
         """Actual initialization logic of Client object."""
         super().__init__(auth=self.auth)
@@ -35,6 +38,9 @@ class BaseUSMSClient(ABC):
 
         self._asp_state = {}
 
+        self._initialized = True
+
+    @requires_init
     def post(self, url: str, data: dict | None = None) -> httpx.Response:
         """Send a POST request with ASP.NET hidden fields included."""
         if data is None:
@@ -48,6 +54,7 @@ class BaseUSMSClient(ABC):
 
         return super().post(url=url, data=data)
 
+    @requires_init
     def _extract_asp_state(self, response_content: bytes) -> None:
         """Extract ASP.NET hidden fields from responses to maintain session state."""
         try:
@@ -59,6 +66,7 @@ class BaseUSMSClient(ABC):
         except Exception as e:  # noqa: BLE001
             logger.warning(f"Failed to parse ASP.NET state: {e}")
 
+    @requires_init
     @abstractmethod
     async def _update_asp_state(self, response: httpx.Response) -> None:
         """Extract ASP.NET hidden fields from responses to maintain session state."""
@@ -67,6 +75,7 @@ class BaseUSMSClient(ABC):
 class USMSClient(BaseUSMSClient, httpx.Client):
     """Sync HTTP client for interacting with USMS."""
 
+    @requires_init
     def _update_asp_state(self, response: httpx.Response) -> None:
         """Extract ASP.NET hidden fields from responses to maintain session state."""
         super()._extract_asp_state(response.read())
@@ -79,10 +88,12 @@ class AsyncUSMSClient(BaseUSMSClient, httpx.AsyncClient):
         """Actual initialization logic of Client object."""
         super().initialize()
 
+    @requires_init
     async def post(self, url: str, data: dict | None = None) -> httpx.Response:
         """Send a POST request with ASP.NET hidden fields included."""
         return await super().post(url=url, data=data)
 
+    @requires_init
     async def _update_asp_state(self, response: httpx.Response) -> None:
         """Extract ASP.NET hidden fields from responses to maintain session state."""
         super()._extract_asp_state(await response.aread())

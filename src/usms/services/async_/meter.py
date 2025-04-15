@@ -6,6 +6,7 @@ import pandas as pd
 
 from usms.config.constants import BRUNEI_TZ
 from usms.services.meter import BaseUSMSMeter
+from usms.utils.decorators import requires_init
 from usms.utils.helpers import sanitize_date
 from usms.utils.logging_config import logger
 
@@ -32,6 +33,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         logger.debug(f"[{self.no}] Fetched {self.type} meter {self.no}")
         return data
 
+    @requires_init
     async def fetch_hourly_consumptions(self, date: datetime) -> pd.Series:
         """Fetch hourly consumptions for a given date and return as pd.Series."""
         date = sanitize_date(date)
@@ -75,6 +77,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         logger.debug(f"[{self.no}] Fetched consumptions for: {date.date()}")
         return hourly_consumptions[self.get_unit()]
 
+    @requires_init
     async def fetch_daily_consumptions(self, date: datetime) -> pd.Series:
         """Fetch daily consumptions for a given date and return as pd.Series."""
         date = sanitize_date(date)
@@ -116,6 +119,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         logger.debug(f"[{self.no}] Fetched consumptions for: {date.year}-{date.month}")
         return daily_consumptions[self.get_unit()]
 
+    @requires_init
     async def get_previous_n_month_consumptions(self, n=0) -> pd.Series:
         """
         Return the consumptions for previous n month.
@@ -131,6 +135,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             date = date - timedelta(days=1)
         return await self.fetch_daily_consumptions(date)
 
+    @requires_init
     async def get_last_n_days_hourly_consumptions(self, n=0) -> pd.Series:
         """
         Return the hourly unit consumptions for the last n days accumulatively.
@@ -159,6 +164,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
 
         return last_n_days_hourly_consumptions
 
+    @requires_init
     async def refresh_data(self) -> bool:
         """Fetch new data and update the meter info."""
         logger.info(f"[{self.no}] Checking for updates")
@@ -181,6 +187,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         logger.info(f"[{self.no}] No new updates found")
         return False
 
+    @requires_init
     async def check_update_and_refresh(self) -> bool:
         """Refresh data if an update is due, then return True if update successful."""
         try:
@@ -193,6 +200,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         # Update not dued, data not refreshed
         return False
 
+    @requires_init
     async def get_all_hourly_consumptions(self) -> pd.Series:
         """Get the hourly unit consumptions for all days and months."""
         logger.debug(f"[{self.no}] Getting all hourly consumptions")
@@ -209,6 +217,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
 
         return self.hourly_consumptions
 
+    @requires_init
     async def find_earliest_consumption_date(self) -> datetime:
         """Determine the earliest date for which hourly consumption data is available."""
         if self.earliest_consumption_date is not None:

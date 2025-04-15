@@ -12,6 +12,7 @@ import pandas as pd
 
 from usms.config.constants import BRUNEI_TZ, TARIFFS, UNITS
 from usms.models.meter import USMSMeter as USMSMeterModel
+from usms.utils.decorators import requires_init
 from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
 from usms.utils.logging_config import logger
 
@@ -41,6 +42,8 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         self.session = account.session
         self.node_no = node_no
 
+        self._initialized = False
+
     def initialize(self):
         """Set initial values for class variables."""
         self.last_refresh = self.last_update
@@ -50,6 +53,8 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         self.daily_consumptions = new_consumptions_dataframe(self.get_unit(), "D")
 
         self.update_interval = timedelta(seconds=3600)
+
+        self._initialized = True
 
     def parse_info(self, response: httpx.Response | bytes) -> dict:
         """Parse data from meter info page and return as json."""
@@ -262,6 +267,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
         return {"error_message": error_message}
 
+    @requires_init
     def get_hourly_consumptions(self, date: datetime) -> pd.Series:
         """Check and return consumptions found for a given day."""
         day_consumption = self.hourly_consumptions[
@@ -289,6 +295,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
                 return day_consumption[self.get_unit()]
         return new_consumptions_dataframe(self.get_unit(), "h")[self.get_unit()]
 
+    @requires_init
     def get_daily_consumptions(self, date: datetime) -> pd.Series:
         """Check and return consumptions found for a given month."""
         month_consumption = self.daily_consumptions[
@@ -393,6 +400,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         total_cost = tariff.calculate_cost(total_consumption)
         return total_cost
 
+    @requires_init
     def is_update_due(self) -> bool:
         """Check if an update is due (based on last update timestamp)."""
         now = datetime.now(tz=BRUNEI_TZ)

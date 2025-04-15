@@ -20,6 +20,8 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
         self.username = username
         self.auth = USMSAuth(username, password)
 
+        self._initialized = False
+
     def parse_info(self, response: httpx.Response | bytes) -> dict:
         """Parse data from account info page and return as json."""
         if isinstance(response, httpx.Response):
