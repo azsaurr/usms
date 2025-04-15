@@ -1,3 +1,10 @@
+## v0.5.1 (2025-04-15)
+
+### Refactor
+
+- restructure codebase with separate sync/async services, shared base classes, models and utility functions
+- **async**: offload blocking operations to async functions
+
 ## v0.5.0 (2025-04-13)
 
 ### Feat
