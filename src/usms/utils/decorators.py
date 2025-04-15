@@ -1,6 +1,6 @@
 """USMS Decorators."""
 
-from USMS.exceptions.errors import USMSNotInitializedError
+from usms.exceptions.errors import USMSNotInitializedError
 
 
 def requires_init(method):
