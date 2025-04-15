@@ -1,3 +1,9 @@
+## v0.5.3 (2025-04-15)
+
+### Feat
+
+- **client**: add async SSL context setup for AsyncUSMSClient
+
 ## v0.5.2 (2025-04-15)
 
 ### Feat
