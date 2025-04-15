@@ -1,3 +1,15 @@
+## v0.5.2 (2025-04-15)
+
+### Feat
+
+- **exceptions**: add new exceptions for validation and lifecycle checks
+- introduce classmethod-based initialization for cleaner async/sync instantiation
+- introduce decorators to prevent usage of certain methods before object is initialized
+
+### Fix
+
+- fixed typo in module import
+
 ## v0.5.1 (2025-04-15)
 
 ### Refactor
