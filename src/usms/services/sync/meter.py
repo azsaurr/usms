@@ -1,11 +1,4 @@
-"""
-USMS Meter Module.
-
-This module defines the USMSMeter class,
-which represents a smart meter in the USMS system.
-It provides methods to retrieve meter details,
-check for updates and retrieve consumption histories.
-"""
+"""Sync USMS Meter Service."""
 
 from datetime import datetime, timedelta
 
@@ -18,19 +11,10 @@ from usms.utils.logging_config import logger
 
 
 class USMSMeter(BaseUSMSMeter):
-    """
-    Represents a USMS meter.
-
-    Represents a USMS meter, allowing access to meter details
-    and consumption histories.
-    """
+    """Sync USMS Meter Service that inherits BaseUSMSMeter."""
 
     def initialize(self):
-        """
-        Initialize a USMSMeter instance.
-
-        Fetch a USMSMeter instance, through the node number of its associated account.
-        """
+        """Fetch meter info and then set initial class attributes."""
         logger.debug(f"[{self._account.username}] Initializing meter {self.node_no}")
         self.fetch_info()
         super().initialize()

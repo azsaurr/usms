@@ -1,11 +1,4 @@
-"""
-USMS Account Module.
-
-This module defines the USMSAccount class,
-which represents a user account in the USMS system.
-It provides methods to retrieve account details,
-manage associated meters and handle user sessions.
-"""
+"""Sync USMS Account Service."""
 
 import httpx
 
@@ -16,19 +9,15 @@ from usms.utils.logging_config import logger
 
 
 class USMSAccount(BaseUSMSAccount):
-    """
-    Represents a USMS account.
-
-    Represents a USMS account, allowing access to account details
-    and associated meters.
-    """
+    """Sync USMS Account Service that inherits BaseUSMSAccount."""
 
     session: USMSClient
 
     def initialize(self):
-        """Initialize a USMSAccount instance."""
+        """Initialize session object, fetch account info and set class attributes."""
         logger.debug(f"[{self.username}] Initializing account {self.username}")
-        self.session = USMSClient.create(self.auth)
+        self.session = USMSClient(self.auth)
+        self.session.initialize()
         self.fetch_info()
         logger.debug(f"[{self.username}] Initialized account")
 
@@ -67,7 +56,7 @@ class USMSAccount(BaseUSMSAccount):
         self.session.cookies = {}
 
         if not self.is_authenticated():
-            logger.debug(f"[{self.username}] Logged out")
+            logger.debug(f"[{self.username}] Log out successful")
             return True
 
         logger.debug(f"[{self.username}] Log out fail")
@@ -80,7 +69,7 @@ class USMSAccount(BaseUSMSAccount):
         self.session.get("/AccountInfo")
 
         if self.is_authenticated():
-            logger.debug(f"[{self.username}] Logged in")
+            logger.debug(f"[{self.username}] Log in successful")
             return True
 
         logger.debug(f"[{self.username}] Log in fail")
@@ -93,28 +82,15 @@ class USMSAccount(BaseUSMSAccount):
         Check if the current session is authenticated
         by sending a request without retrying or triggering auth logic.
         """
-        logger.debug(f"[{self.username}] Checking if authenticated")
         is_authenticated = False
         try:
-            # Temporarily disable the custom Auth
-            usms_auth = self.session.auth
-            self.session.auth = None
-
-            # Build and send a raw request without auth logic
-            request = self.session.build_request("GET", f"{self.session.BASE_URL}/AccountInfo")
-            response = self.session.send(request, stream=False)
-
-            # Now check manually using custom Auth logic
-            is_authenticated = not usms_auth.is_expired(response)
-
-            if is_authenticated:
-                logger.debug(f"[{self.username}] Account is authenticated")
-            else:
-                logger.debug(f"[{self.username}] Account is NOT authenticated")
+            response = self.session.get("/AccountInfo", auth=None)
+            is_authenticated = not self.auth.is_expired(response)
         except httpx.HTTPError as error:
-            logger.warning(f"[{self.username}] Login check failed: {error}")
-        finally:
-            # Restore the custom Auth back
-            self.session.auth = usms_auth
+            logger.error(f"[{self.username}] Login check failed: {error}")
 
+        if is_authenticated:
+            logger.debug(f"[{self.username}] Account is authenticated")
+        else:
+            logger.debug(f"[{self.username}] Account is NOT authenticated")
         return is_authenticated

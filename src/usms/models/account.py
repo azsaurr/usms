@@ -1,11 +1,4 @@
-"""
-USMS Account Module.
-
-This module defines the USMSAccount class,
-which represents a user account in the USMS system.
-It provides methods to retrieve account details,
-manage associated meters and handle user sessions.
-"""
+"""USMS Account Module."""
 
 from dataclasses import dataclass
 

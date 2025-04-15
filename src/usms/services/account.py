@@ -1,11 +1,6 @@
-"""
-USMS Account Module.
+"""Base USMS Account Service."""
 
-This module defines the USMSAccount class,
-which represents a user account in the USMS system.
-It provides methods to retrieve account details,
-manage associated meters and handle user sessions.
-"""
+from abc import ABC
 
 import httpx
 import lxml.html
@@ -14,19 +9,14 @@ from usms.core.auth import USMSAuth
 from usms.models.account import USMSAccount as USMSAccountModel
 
 
-class BaseUSMSAccount(USMSAccountModel):
-    """
-    Represents a USMS account.
-
-    Represents a USMS account, allowing access to account details
-    and associated meters.
-    """
+class BaseUSMSAccount(ABC, USMSAccountModel):
+    """Base USMS Account Service to be inherited."""
 
     username: str
     auth: USMSAuth
 
     def __init__(self, username: str, password: str) -> None:
-        """Initialize a USMSAccount instance."""
+        """Initialize username variable and USMSAuth object."""
         self.username = username
         self.auth = USMSAuth(username, password)
 

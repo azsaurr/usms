@@ -1,11 +1,4 @@
-"""
-USMS Account Module.
-
-This module defines the USMSAccount class,
-which represents a user account in the USMS system.
-It provides methods to retrieve account details,
-manage associated meters and handle user sessions.
-"""
+"""Async USMS Account Service."""
 
 import httpx
 
@@ -16,19 +9,15 @@ from usms.utils.logging_config import logger
 
 
 class AsyncUSMSAccount(BaseUSMSAccount):
-    """
-    Represents a USMS account.
-
-    Represents a USMS account, allowing access to account details
-    and associated meters.
-    """
+    """Async USMS Account Service that inherits BaseUSMSAccount."""
 
     session: AsyncUSMSClient
 
     async def initialize(self):
-        """Initialize a USMSAccount instance."""
+        """Initialize session object, fetch account info and set class attributes."""
         logger.debug(f"[{self.username}] Initializing account {self.username}")
-        self.session = await AsyncUSMSClient.create(self.auth)
+        self.session = AsyncUSMSClient(self.auth)
+        await self.session.initialize()
         await self.fetch_info()
         logger.debug(f"[{self.username}] Initialized account")
 
@@ -63,11 +52,12 @@ class AsyncUSMSAccount(BaseUSMSAccount):
     async def log_out(self) -> bool:
         """Log the user out of the USMS session by clearing session cookies."""
         logger.debug(f"[{self.username}] Logging out {self.username}...")
+
         await self.session.get("/ResLogin")
         self.session.cookies = {}
 
-        if not self.is_authenticated():
-            logger.debug(f"[{self.username}] Logged out")
+        if not await self.is_authenticated():
+            logger.debug(f"[{self.username}] Log out successful")
             return True
 
         logger.debug(f"[{self.username}] Log out fail")
@@ -79,8 +69,8 @@ class AsyncUSMSAccount(BaseUSMSAccount):
 
         await self.session.get("/AccountInfo")
 
-        if self.is_authenticated():
-            logger.debug(f"[{self.username}] Logged in")
+        if await self.is_authenticated():
+            logger.debug(f"[{self.username}] Log in successful")
             return True
 
         logger.debug(f"[{self.username}] Log in fail")
@@ -93,28 +83,15 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         Check if the current session is authenticated
         by sending a request without retrying or triggering auth logic.
         """
-        logger.debug(f"[{self.username}] Checking if authenticated")
         is_authenticated = False
         try:
-            # Temporarily disable the custom Auth
-            usms_auth = self.session.auth
-            self.session.auth = None
-
-            # Build and send a raw request without auth logic
-            request = self.session.build_request("GET", f"{self.session.BASE_URL}/AccountInfo")
-            response = await self.session.send(request, stream=False)
-
-            # Now check manually using custom Auth logic
-            is_authenticated = not usms_auth.is_expired(response)
-
-            if is_authenticated:
-                logger.debug(f"[{self.username}] Account is authenticated")
-            else:
-                logger.debug(f"[{self.username}] Account is NOT authenticated")
+            response = await self.session.get("/AccountInfo", auth=None)
+            is_authenticated = not self.auth.is_expired(response)
         except httpx.HTTPError as error:
-            logger.warning(f"[{self.username}] Login check failed: {error}")
-        finally:
-            # Restore the custom Auth back
-            self.session.auth = usms_auth
+            logger.error(f"[{self.username}] Login check failed: {error}")
 
+        if is_authenticated:
+            logger.debug(f"[{self.username}] Account is authenticated")
+        else:
+            logger.debug(f"[{self.username}] Account is NOT authenticated")
         return is_authenticated

@@ -1,11 +1,4 @@
-"""
-USMS Meter Module.
-
-This module defines the USMSMeter class,
-which represents a smart meter in the USMS system.
-It provides methods to retrieve meter details,
-check for updates and retrieve consumption histories.
-"""
+"""USMS Meter Module."""
 
 from dataclasses import dataclass
 from datetime import datetime

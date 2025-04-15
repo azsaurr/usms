@@ -33,7 +33,7 @@ class USMSAuth(httpx.Auth):
         response = yield request
 
         if self.is_expired(response):
-            logger.debug("Authenticating...")
+            # logger.debug("Executing authentication flow...")  # noqa: ERA001
 
             # First login request to get hidden ASP state
             response = yield httpx.Request(
@@ -79,15 +79,14 @@ class USMSAuth(httpx.Auth):
 
             response = yield response.next_request
             response = yield response.next_request
-            logger.debug("Logged in")
+            logger.debug("Authentication flow complete")
 
             yield request
 
     def is_expired(self, response: httpx.Response) -> bool:
         """Check if the session has expired based on response content."""
-        logger.debug("Checking session...")
         if response.status_code == 302 and "SessionExpire" in response.text:  # noqa: PLR2004
-            logger.debug("Not logged in")
+            # logger.debug("Not logged in")  # noqa: ERA001
             return True
         if (
             response.status_code == 200  # noqa: PLR2004
@@ -95,5 +94,4 @@ class USMSAuth(httpx.Auth):
         ):
             logger.debug("Session has expired")
             return True
-        logger.debug("Session OK")
         return False

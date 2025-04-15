@@ -7,15 +7,12 @@ and receive responses with USMS pages.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union
 
 import httpx
 import lxml.html
 
+from usms.core.auth import USMSAuth
 from usms.utils.logging_config import logger
-
-if TYPE_CHECKING:
-    from usms.core.auth import USMSAuth
 
 
 class BaseUSMSClient(ABC):
@@ -25,27 +22,18 @@ class BaseUSMSClient(ABC):
 
     _asp_state: dict
 
-    @classmethod
-    @abstractmethod
-    def create(
-        cls,
-        auth: "USMSAuth",
-    ) -> Union["USMSClient", "AsyncUSMSClient"]:
-        """Construct the client without blocking in async context."""
+    def __init__(self, auth: USMSAuth) -> None:
+        self.auth = auth
 
-    def __actual_init__(
-        self,
-        auth: "USMSAuth",
-    ) -> Union["USMSClient", "AsyncUSMSClient"]:
-        """Initialize logic."""
-        super().__init__(auth=auth)
+    def initialize(self) -> None:
+        """Actual initialization logic of Client object."""
+        super().__init__(auth=self.auth)
         self.base_url = self.BASE_URL
         self.http2 = True
         self.timeout = 30
         self.event_hooks["response"] = [self._update_asp_state]
 
         self._asp_state = {}
-        return self
 
     def post(self, url: str, data: dict | None = None) -> httpx.Response:
         """Send a POST request with ASP.NET hidden fields included."""
@@ -79,16 +67,6 @@ class BaseUSMSClient(ABC):
 class USMSClient(BaseUSMSClient, httpx.Client):
     """Sync HTTP client for interacting with USMS."""
 
-    def __init__(self, *args, **kwargs):
-        """Prevent direct init; use `create()` instead."""
-        msg = "Use `USMSClient.create(auth)` to initialize this client."
-        raise RuntimeError(msg)
-
-    @classmethod
-    def create(cls, auth: "USMSAuth") -> "USMSClient":
-        """Construct the client without blocking in async context."""
-        return super().__new__(cls).__actual_init__(auth)
-
     def _update_asp_state(self, response: httpx.Response) -> None:
         """Extract ASP.NET hidden fields from responses to maintain session state."""
         super()._extract_asp_state(response.read())
@@ -97,15 +75,9 @@ class USMSClient(BaseUSMSClient, httpx.Client):
 class AsyncUSMSClient(BaseUSMSClient, httpx.AsyncClient):
     """Async HTTP client for interacting with USMS."""
 
-    def __init__(self, *args, **kwargs):
-        """Prevent direct init; use `create()` instead."""
-        msg = "Use `AsyncUSMSClient.create(auth)` to initialize this client."
-        raise RuntimeError(msg)
-
-    @classmethod
-    async def create(cls, auth: "USMSAuth") -> "AsyncUSMSClient":
-        """Construct the client without blocking in async context."""
-        return super().__new__(cls).__actual_init__(auth)
+    async def initialize(self) -> None:
+        """Actual initialization logic of Client object."""
+        super().initialize()
 
     async def post(self, url: str, data: dict | None = None) -> httpx.Response:
         """Send a POST request with ASP.NET hidden fields included."""

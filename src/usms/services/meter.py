@@ -1,13 +1,7 @@
-"""
-USMS Meter Module.
-
-This module defines the USMSMeter class,
-which represents a smart meter in the USMS system.
-It provides methods to retrieve meter details,
-check for updates and retrieve consumption histories.
-"""
+"""Base USMS Meter Service."""
 
 import base64
+from abc import ABC
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Union
 from zoneinfo import ZoneInfo
@@ -27,15 +21,9 @@ if TYPE_CHECKING:
     from usms.services.sync.account import USMSAccount
 
 
-class BaseUSMSMeter(USMSMeterModel):
-    """
-    Represents a USMS meter.
+class BaseUSMSMeter(ABC, USMSMeterModel):
+    """Base USMS Meter Service to be inherited."""
 
-    Represents a USMS meter, allowing access to meter details
-    and consumption histories.
-    """
-
-    """USMS Meter class attributes."""
     _account: Union["USMSAccount", "AsyncUSMSAccount"]
     session: Union["USMSClient", "AsyncUSMSClient"]
     node_no: str
@@ -48,13 +36,13 @@ class BaseUSMSMeter(USMSMeterModel):
     update_interval: timedelta
 
     def __init__(self, account: Union["USMSAccount", "AsyncUSMSAccount"], node_no: str) -> None:
-        """Initialize a USMSMeter instance."""
+        """Set initial class variables."""
         self._account = account
         self.session = account.session
         self.node_no = node_no
 
     def initialize(self):
-        """Initialize a USMSMeter instance."""
+        """Set initial values for class variables."""
         self.last_refresh = self.last_update
         self.earliest_consumption_date = None
 
@@ -188,7 +176,7 @@ class BaseUSMSMeter(USMSMeterModel):
         self.status = data.get("status", "")
 
     def _build_info_payload(self) -> dict:
-        # build payload
+        """Build and return payload for meter info page."""
         payload = {}
         payload["ASPxTreeView1"] = (
             "{&quot;nodesState&quot;:[{&quot;N0_0&quot;:&quot;T&quot;,&quot;N0&quot;:&quot;T&quot;},&quot;"
@@ -271,11 +259,11 @@ class BaseUSMSMeter(USMSMeterModel):
 
         error_message = response_html.find(""".//span[@id="pcErr_lblErrMsg"]""").text_content()
         if error_message:
-            logger.error(f"[{self.no}] Error while fetching for consumptions: {error_message}")
+            logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
         return {"error_message": error_message}
 
     def get_hourly_consumptions(self, date: datetime) -> pd.Series:
-        """Check and return for consumptions found for a given day."""
+        """Check and return consumptions found for a given day."""
         day_consumption = self.hourly_consumptions[
             self.hourly_consumptions.index.date == date.date()
         ]
@@ -302,7 +290,7 @@ class BaseUSMSMeter(USMSMeterModel):
         return new_consumptions_dataframe(self.get_unit(), "h")[self.get_unit()]
 
     def get_daily_consumptions(self, date: datetime) -> pd.Series:
-        """Check and return for consumptions found for a given month."""
+        """Check and return consumptions found for a given month."""
         month_consumption = self.daily_consumptions[
             (self.daily_consumptions.index.month == date.month)
             & (self.daily_consumptions.index.year == date.year)
@@ -332,7 +320,7 @@ class BaseUSMSMeter(USMSMeterModel):
         return new_consumptions_dataframe(self.get_unit(), "D")[self.get_unit()]
 
     def parse_hourly_consumptions(self, response: httpx.Response | bytes) -> dict:
-        """Parse data from meter hourly consumptions page and return as pd.DataFrame."""
+        """Parse data from meter hourly consumptions page and return as json."""
         if isinstance(response, httpx.Response):
             response_html = lxml.html.fromstring(response.content)
         elif isinstance(response, bytes):
@@ -357,8 +345,8 @@ class BaseUSMSMeter(USMSMeterModel):
 
         return hourly_consumptions
 
-    def parse_daily_consumptions(self, response: httpx.Response | bytes) -> pd.DataFrame:
-        """Parse data from meter daily consumptions page and return as pd.DataFrame."""
+    def parse_daily_consumptions(self, response: httpx.Response | bytes) -> dict:
+        """Parse data from meter daily consumptions page and return as json."""
         if isinstance(response, httpx.Response):
             response_html = lxml.html.fromstring(response.content)
         elif isinstance(response, bytes):
