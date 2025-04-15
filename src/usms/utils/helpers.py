@@ -1,5 +1,7 @@
 """USMS Helper functions."""
 
+import asyncio
+import ssl
 from datetime import datetime
 
 import pandas as pd
@@ -45,3 +47,20 @@ def new_consumptions_dataframe(unit: str, freq: str) -> pd.DataFrame:
         BRUNEI_TZ
     )
     return new_dataframe
+
+
+async def create_ssl_context() -> ssl.SSLContext:
+    """Run SSL context creation in a thread to avoid blocking the event loop."""
+
+    def setup_ssl():
+        ctx = ssl.create_default_context()
+        try:
+            import certifi
+
+            ctx.load_verify_locations(cafile=certifi.where())
+        except ImportError:
+            pass  # fallback to system defaults
+        return ctx
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, setup_ssl)

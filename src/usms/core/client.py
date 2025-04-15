@@ -13,6 +13,7 @@ import lxml.html
 
 from usms.core.auth import USMSAuth
 from usms.utils.decorators import requires_init
+from usms.utils.helpers import create_ssl_context
 from usms.utils.logging_config import logger
 
 
@@ -26,12 +27,17 @@ class BaseUSMSClient(ABC):
     def __init__(self, auth: USMSAuth) -> None:
         """Initialize auth for this client."""
         self.auth = auth
+        self.ssl_context = None
 
         self._initialized = False
 
     def initialize(self) -> None:
         """Actual initialization logic of Client object."""
-        super().__init__(auth=self.auth)
+        if self.ssl_context is None:
+            super().__init__(auth=self.auth)
+        else:
+            super().__init__(auth=self.auth, verify=self.ssl_context)
+
         self.base_url = self.BASE_URL
         self.http2 = True
         self.timeout = 30
@@ -94,6 +100,7 @@ class AsyncUSMSClient(BaseUSMSClient, httpx.AsyncClient):
 
     async def initialize(self) -> None:
         """Actual initialization logic of Client object."""
+        self.ssl_context = await create_ssl_context()
         super().initialize()
 
     @classmethod
