@@ -17,12 +17,19 @@ class AsyncUSMSAccount(BaseUSMSAccount):
     async def initialize(self):
         """Initialize session object, fetch account info and set class attributes."""
         logger.debug(f"[{self.username}] Initializing account {self.username}")
-        self.session = AsyncUSMSClient(self.auth)
-        await self.session.initialize()
+        self.session = await AsyncUSMSClient.create(self.auth)
         await self.fetch_info()
 
         self._initialized = True
         logger.debug(f"[{self.username}] Initialized account")
+
+    @classmethod
+    async def create(cls, username: str, password: str) -> "AsyncUSMSAccount":
+        """Initialize and return instance of this class as an object."""
+        self = cls(username, password)
+        await self.initialize()
+        await self.initialize_meters()
+        return self
 
     @requires_init
     async def initialize_meters(self):

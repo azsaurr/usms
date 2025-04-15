@@ -17,12 +17,19 @@ class USMSAccount(BaseUSMSAccount):
     def initialize(self):
         """Initialize session object, fetch account info and set class attributes."""
         logger.debug(f"[{self.username}] Initializing account {self.username}")
-        self.session = USMSClient(self.auth)
-        self.session.initialize()
+        self.session = USMSClient.create(self.auth)
         self.fetch_info()
 
         self._initialized = True
         logger.debug(f"[{self.username}] Initialized account")
+
+    @classmethod
+    def create(cls, username: str, password: str) -> "USMSAccount":
+        """Initialize and return instance of this class as an object."""
+        self = cls(username, password)
+        self.initialize()
+        self.initialize_meters()
+        return self
 
     @requires_init
     def initialize_meters(self):

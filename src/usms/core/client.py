@@ -24,6 +24,7 @@ class BaseUSMSClient(ABC):
     _asp_state: dict
 
     def __init__(self, auth: USMSAuth) -> None:
+        """Initialize auth for this client."""
         self.auth = auth
 
         self._initialized = False
@@ -75,6 +76,13 @@ class BaseUSMSClient(ABC):
 class USMSClient(BaseUSMSClient, httpx.Client):
     """Sync HTTP client for interacting with USMS."""
 
+    @classmethod
+    def create(cls, auth: USMSAuth) -> "USMSClient":
+        """Initialize and return instance of this class as an object."""
+        self = cls(auth)
+        self.initialize()
+        return self
+
     @requires_init
     def _update_asp_state(self, response: httpx.Response) -> None:
         """Extract ASP.NET hidden fields from responses to maintain session state."""
@@ -87,6 +95,13 @@ class AsyncUSMSClient(BaseUSMSClient, httpx.AsyncClient):
     async def initialize(self) -> None:
         """Actual initialization logic of Client object."""
         super().initialize()
+
+    @classmethod
+    async def create(cls, auth: USMSAuth) -> "AsyncUSMSClient":
+        """Initialize and return instance of this class as an object."""
+        self = cls(auth)
+        await self.initialize()
+        return self
 
     @requires_init
     async def post(self, url: str, data: dict | None = None) -> httpx.Response:

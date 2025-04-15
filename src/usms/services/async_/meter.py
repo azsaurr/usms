@@ -1,6 +1,7 @@
 """Async USMS Meter Service."""
 
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Union
 
 import pandas as pd
 
@@ -9,6 +10,10 @@ from usms.services.meter import BaseUSMSMeter
 from usms.utils.decorators import requires_init
 from usms.utils.helpers import sanitize_date
 from usms.utils.logging_config import logger
+
+if TYPE_CHECKING:
+    from usms.services.async_.account import AsyncUSMSAccount
+    from usms.services.sync.account import USMSAccount
 
 
 class AsyncUSMSMeter(BaseUSMSMeter):
@@ -20,6 +25,15 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         await self.fetch_info()
         super().initialize()
         logger.debug(f"[{self._account.username}] Initialized meter {self.node_no}")
+
+    @classmethod
+    async def create(
+        cls, account: Union["USMSAccount", "AsyncUSMSAccount"], node_no: str
+    ) -> "AsyncUSMSMeter":
+        """Initialize and return instance of this class as an object."""
+        self = cls(account, node_no)
+        await self.initialize()
+        return self
 
     async def fetch_info(self) -> dict:
         """Fetch meter information, parse data, initialize class attributes and return as json."""
