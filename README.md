@@ -63,7 +63,7 @@ username = "01001234" # your ic number
 password = "hunter1"
 
 # initialize the account
-account = USMSAccount(username, password)
+account = USMSAccount.create(username, password)
 
 # print out the account information
 print(account.reg_no)
