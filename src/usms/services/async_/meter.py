@@ -8,7 +8,7 @@ import pandas as pd
 from usms.config.constants import BRUNEI_TZ
 from usms.services.meter import BaseUSMSMeter
 from usms.utils.decorators import requires_init
-from usms.utils.helpers import sanitize_date
+from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
@@ -159,11 +159,10 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         n=1 : data from yesterday until today
         n=2 : data from 2 days ago until today
         """
-        last_n_days_hourly_consumptions = pd.Series(
-            dtype=float,
-            index=pd.DatetimeIndex([], tz=BRUNEI_TZ, freq="h"),
-            name=self.get_unit(),
-        )
+        last_n_days_hourly_consumptions = new_consumptions_dataframe(
+            self.get_unit(),
+            "h",
+        )[self.get_unit()]
 
         upper_date = datetime.now(tz=BRUNEI_TZ)
         lower_date = upper_date - timedelta(days=n)
@@ -229,7 +228,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
                 f"[{self.no}] Getting all hourly consumptions progress: {i} out of {range_date}, {i / range_date * 100}%"
             )
 
-        return self.hourly_consumptions
+        return self.hourly_consumptions[self.get_unit()]
 
     @requires_init
     async def find_earliest_consumption_date(self) -> datetime:
