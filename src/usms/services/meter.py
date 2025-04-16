@@ -275,22 +275,19 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         ]
         # Check if consumption for this date was already fetched
         if not day_consumption.empty:
-            no_of_hours = 24
-            if self.hourly_consumptions.index.min().date() == date.date():
-                # This check is because the earliest date is always missing 00:00:00
-                no_of_hours = 23
-
             now = datetime.now(tz=BRUNEI_TZ)
 
-            # Makes sure that the data is complete for the given day
-            if (day_consumption.shape[0] == no_of_hours) or (
-                # If it is incomplete, and it is today, that means it might have been updated
-                date.date() == now.date()
-                # Also check if not enough time has passed since last check, then use stored data
-                and (now - self.hourly_consumptions["last_checked"].min()) < self.update_interval
-                # Take into account the 00:00:00 data from yesterday
-                and day_consumption.shape[0] > 1
+            last_checked = day_consumption["last_checked"].min()
+            time_since_last_checked = now - last_checked
+
+            time_since_given_date = now - date
+
+            # If not enough time has passed since the last check
+            if (time_since_last_checked < self.update_interval) or (
+                # Or the date requested is over 3 days ago
+                time_since_given_date > timedelta(days=3)
             ):
+                # Then just use stored data
                 logger.debug(f"[{self.no}] Found consumptions for: {date.date()}")
                 return day_consumption[self.get_unit()]
         return new_consumptions_dataframe(self.get_unit(), "h")[self.get_unit()]
@@ -306,22 +303,17 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         if not month_consumption.empty:
             now = datetime.now(tz=BRUNEI_TZ)
 
-            if (
-                # Makes sure that the data is complete for the given month
-                (month_consumption.shape[0] == pd.Timestamp(date).days_in_month)
-                # Or if its the earliest month recorded (possible missing data)
-                or (
-                    self.hourly_consumptions.index.min().year == date.year
-                    and self.hourly_consumptions.index.min().month == date.month
-                )
-                # If this month and enough time has passed since last check, then use stored data
-                or (
-                    (date.year == now.year and date.month == now.month)
-                    and (
-                        (now - self.daily_consumptions["last_checked"].min()) < self.update_interval
-                    )
-                )
+            last_checked = month_consumption["last_checked"].min()
+            time_since_last_checked = now - last_checked
+
+            time_since_given_date = now - date
+
+            # If not enough time has passed since the last check
+            if (time_since_last_checked < self.update_interval) or (
+                # Or the date requested is over 1 month + 3 days ago
+                time_since_given_date > timedelta(days=34)
             ):
+                # Then just use stored data
                 logger.debug(f"[{self.no}] Found consumptions for: {date.year}-{date.month}")
                 return month_consumption[self.get_unit()]
         return new_consumptions_dataframe(self.get_unit(), "D")[self.get_unit()]

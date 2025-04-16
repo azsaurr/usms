@@ -75,7 +75,7 @@ class USMSMeter(BaseUSMSMeter):
             columns=[self.get_unit()],
         )
         hourly_consumptions.index = pd.to_datetime(
-            [date + timedelta(hours=hour) for hour in hourly_consumptions.index]
+            [date + timedelta(hours=hour - 1) for hour in hourly_consumptions.index]
         )
         hourly_consumptions = hourly_consumptions.asfreq("h")
         hourly_consumptions["last_checked"] = datetime.now(tz=BRUNEI_TZ)
