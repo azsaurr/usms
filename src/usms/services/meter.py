@@ -35,6 +35,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
     daily_consumptions: pd.DataFrame
 
     update_interval: timedelta
+    refresh_interval: timedelta
 
     def __init__(self, account: Union["USMSAccount", "AsyncUSMSAccount"], node_no: str) -> None:
         """Set initial class variables."""
@@ -52,7 +53,8 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         self.hourly_consumptions = new_consumptions_dataframe(self.get_unit(), "h")
         self.daily_consumptions = new_consumptions_dataframe(self.get_unit(), "D")
 
-        self.update_interval = timedelta(seconds=3600)
+        self.update_interval = timedelta(seconds=60 * 60)
+        self.refresh_interval = timedelta(seconds=60 * 15)
 
         self._initialized = True
 
@@ -283,7 +285,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             time_since_given_date = now - date
 
             # If not enough time has passed since the last check
-            if (time_since_last_checked < self.update_interval) or (
+            if (time_since_last_checked < self.refresh_interval) or (
                 # Or the date requested is over 3 days ago
                 time_since_given_date > timedelta(days=3)
             ):
@@ -309,7 +311,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             time_since_given_date = now - date
 
             # If not enough time has passed since the last check
-            if (time_since_last_checked < self.update_interval) or (
+            if (time_since_last_checked < self.refresh_interval) or (
                 # Or the date requested is over 1 month + 3 days ago
                 time_since_given_date > timedelta(days=34)
             ):
@@ -399,6 +401,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         # Interval between checking for new updates
         logger.debug(f"[{self.no}] update_interval: {self.update_interval}")
+        logger.debug(f"[{self.no}] refresh_interval: {self.refresh_interval}")
 
         # Elapsed time since the meter was last updated by USMS
         time_since_last_update = now - self.last_update
@@ -413,13 +416,13 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         # If 60 minutes has passed since meter was last updated by USMS
         if time_since_last_update > self.update_interval:
             logger.debug(f"[{self.no}] time_since_last_update > update_interval")
-            # If 60 minutes has passed since a refresh was last attempted
-            if time_since_last_refresh > self.update_interval:
-                logger.debug(f"[{self.no}] time_since_last_refresh > update_interval")
+            # If 15 minutes has passed since a refresh was last attempted
+            if time_since_last_refresh > self.refresh_interval:
+                logger.debug(f"[{self.no}] time_since_last_refresh > refresh_interval")
                 logger.info(f"[{self.no}] Meter is due for an update")
                 return True
 
-            logger.debug(f"[{self.no}] time_since_last_refresh < update_interval")
+            logger.debug(f"[{self.no}] time_since_last_refresh < refresh_interval")
             logger.info(f"[{self.no}] Meter is NOT due for an update")
             return False
 
