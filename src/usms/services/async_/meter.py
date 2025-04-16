@@ -83,7 +83,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         hourly_consumptions["last_checked"] = datetime.now(tz=BRUNEI_TZ)
 
         if hourly_consumptions.empty:
-            logger.debug(f"[{self.no}] No consumptions data for : {date.date()}")
+            logger.warning(f"[{self.no}] No consumptions data for : {date.date()}")
             return hourly_consumptions[self.get_unit()]
 
         self.hourly_consumptions = hourly_consumptions.combine_first(self.hourly_consumptions)
@@ -125,7 +125,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         daily_consumptions["last_checked"] = datetime.now(tz=BRUNEI_TZ)
 
         if daily_consumptions.empty:
-            logger.debug(f"[{self.no}] No consumptions data for : {date.year}-{date.month}")
+            logger.warning(f"[{self.no}] No consumptions data for : {date.year}-{date.month}")
             return daily_consumptions[self.get_unit()]
 
         self.daily_consumptions = daily_consumptions.combine_first(self.daily_consumptions)
@@ -134,7 +134,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         return daily_consumptions[self.get_unit()]
 
     @requires_init
-    async def get_previous_n_month_consumptions(self, n=0) -> pd.Series:
+    async def get_previous_n_month_consumptions(self, n: int = 0) -> pd.Series:
         """
         Return the consumptions for previous n month.
 
@@ -150,7 +150,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         return await self.fetch_daily_consumptions(date)
 
     @requires_init
-    async def get_last_n_days_hourly_consumptions(self, n=0) -> pd.Series:
+    async def get_last_n_days_hourly_consumptions(self, n: int = 0) -> pd.Series:
         """
         Return the hourly unit consumptions for the last n days accumulatively.
 
@@ -175,6 +175,12 @@ class AsyncUSMSMeter(BaseUSMSMeter):
                     last_n_days_hourly_consumptions
                 )
 
+            if n > 3:  # noqa: PLR2004
+                progress = round((i + 1) / (n + 1) * 100, 1)
+                logger.info(
+                    f"[{self.no}] Getting last {n} days hourly consumptions progress: {(i + 1)} out of {(n + 1)}, {progress}%"
+                )
+
         return last_n_days_hourly_consumptions
 
     @requires_init
@@ -187,7 +193,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             temp_meter = AsyncUSMSMeter(self._account, self.node_no)
             temp_info = await temp_meter.fetch_info()
         except Exception as error:  # noqa: BLE001
-            logger.warning(f"[{self.no}] Failed to fetch update with error: {error}")
+            logger.error(f"[{self.no}] Failed to fetch update with error: {error}")
             return False
 
         self.last_refresh = datetime.now(tz=BRUNEI_TZ)
@@ -207,7 +213,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             if self.is_update_due():
                 return await self.refresh_data()
         except Exception as error:  # noqa: BLE001
-            logger.warning(f"[{self.no}] Failed to fetch update with error: {error}")
+            logger.error(f"[{self.no}] Failed to fetch update with error: {error}")
             return False
 
         # Update not dued, data not refreshed
@@ -224,8 +230,9 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         for i in range(range_date):
             date = lower_date + timedelta(days=i)
             await self.fetch_hourly_consumptions(date)
-            logger.debug(
-                f"[{self.no}] Getting all hourly consumptions progress: {i} out of {range_date}, {i / range_date * 100}%"
+            progress = round((i + 1) / range_date * 100, 1)
+            logger.info(
+                f"[{self.no}] Getting all hourly consumptions progress: {(i + 1)} out of {range_date}, {progress}%"
             )
 
         return self.hourly_consumptions[self.get_unit()]
@@ -249,7 +256,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             )
         else:
             date = self.hourly_consumptions.index.min()
-        logger.debug(f"[{self.no}] Finding earliest consumption date, starting from: {date.date()}")
+        logger.info(f"[{self.no}] Finding earliest consumption date, starting from: {date.date()}")
 
         # Exponential backoff to find a missing date
         step = 1
@@ -259,12 +266,12 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             if not hourly_consumptions.empty:
                 step *= 2  # Exponentially increase step
                 date -= timedelta(days=step)
-                logger.debug(f"[{self.no}] Stepping {step} days from {date}")
+                logger.info(f"[{self.no}] Stepping {step} days from {date}")
             elif step == 1:
                 # Already at base step, this is the earliest available data
                 date += timedelta(days=step)
                 self.earliest_consumption_date = date
-                logger.debug(f"[{self.no}] Found earliest consumption date: {date}")
+                logger.info(f"[{self.no}] Found earliest consumption date: {date}")
                 return date
             else:
                 # Went too far — reverse the last large step and reset step to 1

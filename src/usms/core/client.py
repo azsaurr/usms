@@ -70,8 +70,8 @@ class BaseUSMSClient(ABC):
             for hidden_input in response_html.findall(""".//input[@type="hidden"]"""):
                 if hidden_input.value:
                     self._asp_state[hidden_input.name] = hidden_input.value
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"Failed to parse ASP.NET state: {e}")
+        except Exception as error:  # noqa: BLE001
+            logger.error(f"Failed to parse ASP.NET state: {error}")
 
     @requires_init
     @abstractmethod

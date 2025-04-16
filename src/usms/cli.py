@@ -14,7 +14,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from usms import USMSAccount
 from usms.exceptions.errors import USMSLoginError, USMSMeterNumberError
-from usms.utils.logging_config import logging, set_log_level
+from usms.utils.logging_config import init_console_logging, logging
 
 # get usms_version dynamically
 try:
@@ -66,7 +66,7 @@ def run_cli():
     if not getattr(logging, args.log_level.upper(), None):
         print(f"Invalid log level: {args.log_level}")
         sys.exit(1)
-    set_log_level(args.log_level.upper())
+    init_console_logging(args.log_level.upper())
 
     if not args.username or not args.password:
         print("Username and password must be provided (via arguments or environment variables).")

@@ -68,10 +68,10 @@ class USMSAccount(BaseUSMSAccount):
         self.session.cookies = {}
 
         if not self.is_authenticated():
-            logger.debug(f"[{self.username}] Log out successful")
+            logger.info(f"[{self.username}] Log out successful")
             return True
 
-        logger.debug(f"[{self.username}] Log out fail")
+        logger.error(f"[{self.username}] Log out fail")
         return False
 
     @requires_init
@@ -82,10 +82,10 @@ class USMSAccount(BaseUSMSAccount):
         self.session.get("/AccountInfo")
 
         if self.is_authenticated():
-            logger.debug(f"[{self.username}] Log in successful")
+            logger.info(f"[{self.username}] Log in successful")
             return True
 
-        logger.debug(f"[{self.username}] Log in fail")
+        logger.error(f"[{self.username}] Log in fail")
         return False
 
     @requires_init
@@ -106,5 +106,5 @@ class USMSAccount(BaseUSMSAccount):
         if is_authenticated:
             logger.debug(f"[{self.username}] Account is authenticated")
         else:
-            logger.debug(f"[{self.username}] Account is NOT authenticated")
+            logger.error(f"[{self.username}] Account is NOT authenticated")
         return is_authenticated
