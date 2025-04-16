@@ -1,3 +1,9 @@
+## v0.5.5 (2025-04-16)
+
+### Fix
+
+- **logging**: changed logging config to avoid duplicate stdout logs when package is imported from external apps
+
 ## v0.5.4 (2025-04-16)
 
 ### Fix
