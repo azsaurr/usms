@@ -1,3 +1,9 @@
+## v0.5.4 (2025-04-16)
+
+### Fix
+
+- **meter**: return only the unit column of hourly consumptions as a Series, consistent with other functions' return
+
 ## v0.5.3 (2025-04-15)
 
 ### Feat
