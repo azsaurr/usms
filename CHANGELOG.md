@@ -1,3 +1,9 @@
+## v0.5.6 (2025-04-16)
+
+### Fix
+
+- **meter**: offset scraped hourly consumptions data from USMS by 1 hour
+
 ## v0.5.5 (2025-04-16)
 
 ### Fix
