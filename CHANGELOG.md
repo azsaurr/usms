@@ -1,3 +1,9 @@
+## v0.5.7 (2025-04-16)
+
+### Feat
+
+- **meter**: add refresh_interval to allow different frequency of update checks after the update_interval threshold
+
 ## v0.5.6 (2025-04-16)
 
 ### Fix
