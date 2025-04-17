@@ -1,3 +1,9 @@
+## v0.5.9 (2025-04-18)
+
+### Fix
+
+- **meter**: return correct meter data instead of empty, ignoring certain error message parsed from the page
+
 ## v0.5.8 (2025-04-17)
 
 ### Refactor
