@@ -1,3 +1,9 @@
+## v0.5.8 (2025-04-17)
+
+### Refactor
+
+- return JSON from fetch_info without updating class attributes, allowing update checks without having to initialize temporary meter object
+
 ## v0.5.7 (2025-04-16)
 
 ### Feat
