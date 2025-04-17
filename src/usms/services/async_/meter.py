@@ -42,7 +42,8 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         response = await self.session.post("/AccountInfo", data=payload)
 
         data = self.parse_info(response)
-        self.from_json(data)
+        if not self._initialized:
+            self.from_json(data)
 
         logger.debug(f"[{self.no}] Fetched {self.type} meter {self.no}")
         return data
@@ -186,24 +187,22 @@ class AsyncUSMSMeter(BaseUSMSMeter):
     @requires_init
     async def refresh_data(self) -> bool:
         """Fetch new data and update the meter info."""
-        logger.info(f"[{self.no}] Checking for updates")
+        logger.debug(f"[{self.no}] Checking for updates")
 
         try:
-            # Initialize a temporary meter to fetch fresh details in one call
-            temp_meter = AsyncUSMSMeter(self._account, self.node_no)
-            temp_info = await temp_meter.fetch_info()
+            fresh_info = await self.fetch_info()
         except Exception as error:  # noqa: BLE001
             logger.error(f"[{self.no}] Failed to fetch update with error: {error}")
             return False
 
         self.last_refresh = datetime.now(tz=BRUNEI_TZ)
 
-        if temp_info.get("last_update") > self.last_update:
-            logger.info(f"[{self.no}] New updates found")
-            self.from_json(temp_info)
+        if fresh_info.get("last_update") > self.last_update:
+            logger.debug(f"[{self.no}] New updates found")
+            self.from_json(fresh_info)
             return True
 
-        logger.info(f"[{self.no}] No new updates found")
+        logger.debug(f"[{self.no}] No new updates found")
         return False
 
     @requires_init

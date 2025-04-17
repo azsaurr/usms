@@ -69,7 +69,7 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         self.session.cookies = {}
 
         if not await self.is_authenticated():
-            logger.info(f"[{self.username}] Log out successful")
+            logger.debug(f"[{self.username}] Log out successful")
             return True
 
         logger.error(f"[{self.username}] Log out fail")
@@ -83,7 +83,7 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         await self.session.get("/AccountInfo")
 
         if await self.is_authenticated():
-            logger.info(f"[{self.username}] Log in successful")
+            logger.debug(f"[{self.username}] Log in successful")
             return True
 
         logger.error(f"[{self.username}] Log in fail")
@@ -107,5 +107,5 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         if is_authenticated:
             logger.debug(f"[{self.username}] Account is authenticated")
         else:
-            logger.error(f"[{self.username}] Account is NOT authenticated")
+            logger.debug(f"[{self.username}] Account is NOT authenticated")
         return is_authenticated

@@ -419,15 +419,15 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             # If 15 minutes has passed since a refresh was last attempted
             if time_since_last_refresh > self.refresh_interval:
                 logger.debug(f"[{self.no}] time_since_last_refresh > refresh_interval")
-                logger.info(f"[{self.no}] Meter is due for an update")
+                logger.debug(f"[{self.no}] Meter is due for an update")
                 return True
 
             logger.debug(f"[{self.no}] time_since_last_refresh < refresh_interval")
-            logger.info(f"[{self.no}] Meter is NOT due for an update")
+            logger.debug(f"[{self.no}] Meter is NOT due for an update")
             return False
 
         logger.debug(f"[{self.no}] time_since_last_update < update_interval")
-        logger.info(f"[{self.no}] Meter is NOT due for an update")
+        logger.debug(f"[{self.no}] Meter is NOT due for an update")
         return False
 
     def get_remaining_unit(self) -> float:
