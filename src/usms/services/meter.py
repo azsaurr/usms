@@ -266,8 +266,9 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         error_message = response_html.find(""".//span[@id="pcErr_lblErrMsg"]""").text_content()
         if error_message:
-            logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
-        return {"error_message": error_message}
+            return {"error_message": error_message}
+
+        return {"error_message": ""}
 
     @requires_init
     def get_hourly_consumptions(self, date: datetime) -> pd.Series:
@@ -330,12 +331,19 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             response_html = response
 
         error_message = self.parse_consumptions_error(response).get("error_message")
-        if error_message:
-            # raise USMSConsumptionHistoryNotFoundError(error_message)  # noqa: ERA001
-            return new_consumptions_dataframe(self.get_unit(), "h")
+        if error_message == "consumption history not found.":
+            # this error message is somehow not always true
+            # ignore it for now, and check for the table properly instead
+            pass
+        elif error_message != "":
+            logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
 
         hourly_consumptions = {}
+
         table = response_html.find(""".//table[@id="ASPxPageControl1_grid_DXMainTable"]""")
+        if table is None:
+            return hourly_consumptions
+
         for row in table.findall(""".//tr[@class="dxgvDataRow"]"""):
             tds = row.findall(".//td")
 

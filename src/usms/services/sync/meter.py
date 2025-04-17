@@ -75,15 +75,16 @@ class USMSMeter(BaseUSMSMeter):
             orient="index",
             columns=[self.get_unit()],
         )
+
+        if hourly_consumptions.empty:
+            logger.warning(f"[{self.no}] No consumptions data for : {date.date()}")
+            return hourly_consumptions[self.get_unit()]
+
         hourly_consumptions.index = pd.to_datetime(
             [date + timedelta(hours=hour - 1) for hour in hourly_consumptions.index]
         )
         hourly_consumptions = hourly_consumptions.asfreq("h")
         hourly_consumptions["last_checked"] = datetime.now(tz=BRUNEI_TZ)
-
-        if hourly_consumptions.empty:
-            logger.warning(f"[{self.no}] No consumptions data for : {date.date()}")
-            return hourly_consumptions[self.get_unit()]
 
         self.hourly_consumptions = hourly_consumptions.combine_first(self.hourly_consumptions)
 
@@ -241,15 +242,19 @@ class USMSMeter(BaseUSMSMeter):
 
         if self.hourly_consumptions.empty:
             now = datetime.now(tz=BRUNEI_TZ)
-            date = datetime(
-                now.year,
-                now.month,
-                now.day,
-                0,
-                0,
-                0,
-                tzinfo=BRUNEI_TZ,
-            )
+            for i in range(5):
+                date = datetime(
+                    now.year,
+                    now.month,
+                    now.day - i,
+                    0,
+                    0,
+                    0,
+                    tzinfo=BRUNEI_TZ,
+                )
+                hourly_consumptions = self.fetch_hourly_consumptions(date)
+                if not hourly_consumptions.empty:
+                    break
         else:
             date = self.hourly_consumptions.index.min()
         logger.info(f"[{self.no}] Finding earliest consumption date, starting from: {date.date()}")
