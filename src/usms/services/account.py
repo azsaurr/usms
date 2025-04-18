@@ -6,7 +6,11 @@ import httpx
 import lxml.html
 
 from usms.core.auth import USMSAuth
+from usms.exceptions.errors import USMSMeterNumberError
 from usms.models.account import USMSAccount as USMSAccountModel
+from usms.services.async_.meter import AsyncUSMSMeter
+from usms.services.sync.meter import USMSMeter
+from usms.utils.decorators import requires_init
 
 
 class BaseUSMSAccount(ABC, USMSAccountModel):
@@ -54,3 +58,11 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
             "email": email,
             "meters": meters,
         }
+
+    @requires_init
+    def get_meter(self, meter_no: str | int) -> USMSMeter | AsyncUSMSMeter:
+        """Return meter associated with the given meter number."""
+        for meter in self.meters:
+            if str(meter_no) in (str(meter.no), (meter.id)):
+                return meter
+        raise USMSMeterNumberError(meter_no)
