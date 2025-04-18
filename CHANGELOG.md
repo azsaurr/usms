@@ -1,3 +1,9 @@
+## v0.5.10 (2025-04-18)
+
+### Feat
+
+- **cli**: update cli, use asynchronous operations by default and add --sync flag to support synchronous operations
+
 ## v0.5.9 (2025-04-18)
 
 ### Fix
