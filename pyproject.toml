@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]  # https://packaging.python.org/en/latest/specifications/pyproject-toml/
 name = "usms"
-version = "0.5.10"
+version = "0.6.0"
 description = "An unofficial Python library to interface with your USMS account and smart meters."
 readme = "README.md"
 authors = [

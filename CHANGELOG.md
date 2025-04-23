@@ -1,3 +1,9 @@
+## v0.6.0 (2025-04-23)
+
+### Fix
+
+- initial support for new/water meter with no last update timestamp
+
 ## v0.5.10 (2025-04-18)
 
 ### Feat
