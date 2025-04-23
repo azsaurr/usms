@@ -128,17 +128,20 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             .text_content()
             .strip()
         )
-        date = last_update.split()[0].split("/")
-        time = last_update.split()[1].split(":")
-        last_update = datetime(
-            int(date[2]),
-            int(date[1]),
-            int(date[0]),
-            hour=int(time[0]),
-            minute=int(time[1]),
-            second=int(time[2]),
-            tzinfo=BRUNEI_TZ,
-        )
+        if last_update == "-":
+            last_update = datetime.min.replace(tzinfo=BRUNEI_TZ)
+        else:
+            date = last_update.split()[0].split("/")
+            time = last_update.split()[1].split(":")
+            last_update = datetime(
+                int(date[2]),
+                int(date[1]),
+                int(date[0]),
+                hour=int(time[0]),
+                minute=int(time[1]),
+                second=int(time[2]),
+                tzinfo=BRUNEI_TZ,
+            )
 
         status = (
             response_html.find(""".//span[@id="ASPxFormLayout1_lblStatus"]""")

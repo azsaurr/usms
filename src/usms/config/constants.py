@@ -11,7 +11,7 @@ from usms.models.tariff import USMSTariff, USMSTariffTier
 BRUNEI_TZ = ZoneInfo("Asia/Brunei")
 
 ELECTRIC_UNIT = "kWh"
-WATER_UNIT = "meter cube"
+WATER_UNIT = "m³"
 
 ELECTRIC_TARIFF = USMSTariff(
     [
