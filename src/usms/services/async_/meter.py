@@ -1,7 +1,7 @@
 """Async USMS Meter Service."""
 
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -13,40 +13,24 @@ from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
     from usms.services.async_.account import AsyncUSMSAccount
-    from usms.services.sync.account import USMSAccount
 
 
 class AsyncUSMSMeter(BaseUSMSMeter):
     """Async USMS Meter Service that inherits BaseUSMSMeter."""
 
-    async def initialize(self):
+    async def initialize(self, data: dict):
         """Fetch meter info and then set initial class attributes."""
-        logger.debug(f"[{self._account.username}] Initializing meter {self.node_no}")
-        await self.fetch_info()
+        logger.debug(f"[{self._account.username}] Initializing meter")
+        self.from_json(data)
         super().initialize()
-        logger.debug(f"[{self._account.username}] Initialized meter {self.node_no}")
+        logger.debug(f"[{self._account.username}] Initialized meter")
 
     @classmethod
-    async def create(
-        cls, account: Union["USMSAccount", "AsyncUSMSAccount"], node_no: str
-    ) -> "AsyncUSMSMeter":
+    async def create(cls, account: "AsyncUSMSAccount", data: dict) -> "AsyncUSMSMeter":
         """Initialize and return instance of this class as an object."""
-        self = cls(account, node_no)
-        await self.initialize()
+        self = cls(account)
+        await self.initialize(data)
         return self
-
-    async def fetch_info(self) -> dict:
-        """Fetch meter information, parse data, initialize class attributes and return as json."""
-        payload = self._build_info_payload()
-        await self.session.get("/AccountInfo")
-        response = await self.session.post("/AccountInfo", data=payload)
-
-        data = self.parse_info(response)
-        if not self._initialized:
-            self.from_json(data)
-
-        logger.debug(f"[{self.no}] Fetched {self.type} meter {self.no}")
-        return data
 
     @requires_init
     async def fetch_hourly_consumptions(self, date: datetime) -> pd.Series:
@@ -60,10 +44,10 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         logger.debug(f"[{self.no}] Fetching consumptions for: {date.date()}")
         # build payload and perform requests
         payload = self._build_hourly_consumptions_payload(date)
-        await self._account.session.get(f"/Report/UsageHistory?p={self.id}")
-        await self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        await self.session.get(f"/Report/UsageHistory?p={self.id}")
+        await self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
         payload = self._build_hourly_consumptions_payload(date)
-        response = await self._account.session.post(
+        response = await self.session.post(
             f"/Report/UsageHistory?p={self.id}",
             data=payload,
         )
@@ -106,12 +90,10 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         # build payload and perform requests
         payload = self._build_daily_consumptions_payload(date)
 
-        await self._account.session.get(f"/Report/UsageHistory?p={self.id}")
-        await self._account.session.post(f"/Report/UsageHistory?p={self.id}")
-        await self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
-        response = await self._account.session.post(
-            f"/Report/UsageHistory?p={self.id}", data=payload
-        )
+        await self.session.get(f"/Report/UsageHistory?p={self.id}")
+        await self.session.post(f"/Report/UsageHistory?p={self.id}")
+        await self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        response = await self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
 
         daily_consumptions = self.parse_daily_consumptions(response)
 
@@ -184,40 +166,6 @@ class AsyncUSMSMeter(BaseUSMSMeter):
                 )
 
         return last_n_days_hourly_consumptions
-
-    @requires_init
-    async def refresh_data(self) -> bool:
-        """Fetch new data and update the meter info."""
-        logger.debug(f"[{self.no}] Checking for updates")
-
-        try:
-            fresh_info = await self.fetch_info()
-        except Exception as error:  # noqa: BLE001
-            logger.error(f"[{self.no}] Failed to fetch update with error: {error}")
-            return False
-
-        self.last_refresh = datetime.now(tz=BRUNEI_TZ)
-
-        if fresh_info.get("last_update") > self.last_update:
-            logger.debug(f"[{self.no}] New updates found")
-            self.from_json(fresh_info)
-            return True
-
-        logger.debug(f"[{self.no}] No new updates found")
-        return False
-
-    @requires_init
-    async def check_update_and_refresh(self) -> bool:
-        """Refresh data if an update is due, then return True if update successful."""
-        try:
-            if self.is_update_due():
-                return await self.refresh_data()
-        except Exception as error:  # noqa: BLE001
-            logger.error(f"[{self.no}] Failed to fetch update with error: {error}")
-            return False
-
-        # Update not dued, data not refreshed
-        return False
 
     @requires_init
     async def get_all_hourly_consumptions(self) -> pd.Series:

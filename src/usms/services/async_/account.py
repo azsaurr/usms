@@ -1,7 +1,10 @@
 """Async USMS Account Service."""
 
+from datetime import datetime
+
 import httpx
 
+from usms.config.constants import BRUNEI_TZ
 from usms.core.client import AsyncUSMSClient
 from usms.services.account import BaseUSMSAccount
 from usms.services.async_.meter import AsyncUSMSMeter
@@ -17,8 +20,11 @@ class AsyncUSMSAccount(BaseUSMSAccount):
     async def initialize(self):
         """Initialize session object, fetch account info and set class attributes."""
         logger.debug(f"[{self.username}] Initializing account {self.username}")
+
         self.session = await AsyncUSMSClient.create(self.auth)
-        await self.fetch_info()
+
+        data = await self.fetch_info()
+        await self.from_json(data)
 
         self._initialized = True
         logger.debug(f"[{self.username}] Initialized account")
@@ -28,37 +34,42 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         """Initialize and return instance of this class as an object."""
         self = cls(username, password)
         await self.initialize()
-        await self.initialize_meters()
         return self
 
-    @requires_init
-    async def initialize_meters(self):
-        """Initialize all USMSMeters under this account."""
-        for meter in self.meters:
-            await meter.initialize()
-
-    async def fetch_info(self) -> dict:
+    async def fetch_more_info(self) -> dict:
         """Fetch account information, parse data, initialize class attributes and return as json."""
-        logger.debug(f"[{self.username}] Fetching account details")
+        logger.debug(f"[{self.username}] Fetching more account details")
 
         response = await self.session.get("/AccountInfo")
+        data = self.parse_more_info(response)
 
+        logger.debug(f"[{self.username}] Fetched more account details")
+        return data
+
+    async def fetch_info(self) -> dict:
+        """
+        Fetch minimal account and meters information.
+
+        Fetch minimal account and meters information, parse data,
+        initialize class attributes and return as json.
+        """
+        logger.debug(f"[{self.username}] Fetching account details")
+
+        response = await self.session.get("/Home")
         data = self.parse_info(response)
-        await self.from_json(data)
 
         logger.debug(f"[{self.username}] Fetched account details")
         return data
 
     async def from_json(self, data: dict) -> None:
         """Initialize base attributes from a json/dict data."""
-        self.reg_no = data.get("reg_no", "")
-        self.name = data.get("name", "")
-        self.contact_no = data.get("contact_no", "")
-        self.email = data.get("email", "")
+        super().from_json(data)
 
-        self.meters = []
-        for meter_node_no in data.get("meters", []):
-            self.meters.append(AsyncUSMSMeter(self, meter_node_no))
+        if not hasattr(self, "meters") or self.get_meters() == []:
+            self.meters = []
+            for meter_data in data.get("meters", []):
+                meter = await AsyncUSMSMeter.create(self, meter_data)
+                self.meters.append(meter)
 
     @requires_init
     async def log_out(self) -> bool:
@@ -109,3 +120,38 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         else:
             logger.debug(f"[{self.username}] Account is NOT authenticated")
         return is_authenticated
+
+    @requires_init
+    async def refresh_data(self) -> bool:
+        """Fetch new data and update the meter info."""
+        logger.debug(f"[{self.username}] Checking for updates")
+
+        try:
+            fresh_info = await self.fetch_info()
+        except Exception as error:  # noqa: BLE001
+            logger.error(f"[{self.username}] Failed to fetch update with error: {error}")
+            return False
+
+        self.last_refresh = datetime.now(tz=BRUNEI_TZ)
+
+        for meter in fresh_info.get("meters", []):
+            if meter.get("last_update") > self.get_latest_update():
+                logger.debug(f"[{self.username}] New updates found")
+                await self.from_json(fresh_info)
+                return True
+
+        logger.debug(f"[{self.username}] No new updates found")
+        return False
+
+    @requires_init
+    async def check_update_and_refresh(self) -> bool:
+        """Refresh data if an update is due, then return True if update successful."""
+        try:
+            if self.is_update_due():
+                return await self.refresh_data()
+        except Exception as error:  # noqa: BLE001
+            logger.error(f"[{self.username}] Failed to fetch update with error: {error}")
+            return False
+
+        # Update not dued, data not refreshed
+        return False

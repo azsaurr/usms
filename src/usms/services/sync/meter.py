@@ -1,7 +1,7 @@
 """Sync USMS Meter Service."""
 
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -12,39 +12,25 @@ from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
-    from usms.services.async_.account import AsyncUSMSAccount
     from usms.services.sync.account import USMSAccount
 
 
 class USMSMeter(BaseUSMSMeter):
     """Sync USMS Meter Service that inherits BaseUSMSMeter."""
 
-    def initialize(self):
+    def initialize(self, data: dict):
         """Fetch meter info and then set initial class attributes."""
-        logger.debug(f"[{self._account.username}] Initializing meter {self.node_no}")
-        self.fetch_info()
+        logger.debug(f"[{self._account.username}] Initializing meter")
+        self.from_json(data)
         super().initialize()
-        logger.debug(f"[{self._account.username}] Initialized meter {self.node_no}")
+        logger.debug(f"[{self._account.username}] Initialized meter")
 
     @classmethod
-    def create(cls, account: Union["USMSAccount", "AsyncUSMSAccount"], node_no: str) -> "USMSMeter":
+    def create(cls, account: "USMSAccount", data: dict) -> "USMSMeter":
         """Initialize and return instance of this class as an object."""
-        self = cls(account, node_no)
-        self.initialize()
+        self = cls(account)
+        self.initialize(data)
         return self
-
-    def fetch_info(self) -> dict:
-        """Fetch meter information, parse data, initialize class attributes and return as json."""
-        payload = self._build_info_payload()
-        self.session.get("/AccountInfo")
-        response = self.session.post("/AccountInfo", data=payload)
-
-        data = self.parse_info(response)
-        if not self._initialized:
-            self.from_json(data)
-
-        logger.debug(f"[{self.no}] Fetched {self.type} meter {self.no}")
-        return data
 
     @requires_init
     def fetch_hourly_consumptions(self, date: datetime) -> pd.Series:
@@ -58,10 +44,10 @@ class USMSMeter(BaseUSMSMeter):
         logger.debug(f"[{self.no}] Fetching consumptions for: {date.date()}")
         # build payload and perform requests
         payload = self._build_hourly_consumptions_payload(date)
-        self._account.session.get(f"/Report/UsageHistory?p={self.id}")
-        self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        self.session.get(f"/Report/UsageHistory?p={self.id}")
+        self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
         payload = self._build_hourly_consumptions_payload(date)
-        response = self._account.session.post(
+        response = self.session.post(
             f"/Report/UsageHistory?p={self.id}",
             data=payload,
         )
@@ -104,10 +90,10 @@ class USMSMeter(BaseUSMSMeter):
         # build payload and perform requests
         payload = self._build_daily_consumptions_payload(date)
 
-        self._account.session.get(f"/Report/UsageHistory?p={self.id}")
-        self._account.session.post(f"/Report/UsageHistory?p={self.id}")
-        self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
-        response = self._account.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        self.session.get(f"/Report/UsageHistory?p={self.id}")
+        self.session.post(f"/Report/UsageHistory?p={self.id}")
+        self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        response = self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
 
         daily_consumptions = self.parse_daily_consumptions(response)
 
@@ -164,8 +150,7 @@ class USMSMeter(BaseUSMSMeter):
 
         upper_date = datetime.now(tz=BRUNEI_TZ)
         lower_date = upper_date - timedelta(days=n)
-        range_date = (upper_date - lower_date).days + 1
-        for i in range(range_date):
+        for i in range(n + 1):
             date = lower_date + timedelta(days=i)
             hourly_consumptions = self.fetch_hourly_consumptions(date)
 
@@ -181,40 +166,6 @@ class USMSMeter(BaseUSMSMeter):
                 )
 
         return last_n_days_hourly_consumptions
-
-    @requires_init
-    def refresh_data(self) -> bool:
-        """Fetch new data and update the meter info."""
-        logger.debug(f"[{self.no}] Checking for updates")
-
-        try:
-            fresh_info = self.fetch_info()
-        except Exception as error:  # noqa: BLE001
-            logger.error(f"[{self.no}] Failed to fetch update with error: {error}")
-            return False
-
-        self.last_refresh = datetime.now(tz=BRUNEI_TZ)
-
-        if fresh_info.get("last_update") > self.last_update:
-            logger.debug(f"[{self.no}] New updates found")
-            self.from_json(fresh_info)
-            return True
-
-        logger.debug(f"[{self.no}] No new updates found")
-        return False
-
-    @requires_init
-    def check_update_and_refresh(self) -> bool:
-        """Refresh data if an update is due, then return True if update successful."""
-        try:
-            if self.is_update_due():
-                return self.refresh_data()
-        except Exception as error:  # noqa: BLE001
-            logger.error(f"[{self.no}] Failed to fetch update with error: {error}")
-            return False
-
-        # Update not dued, data not refreshed
-        return False
 
     @requires_init
     def get_all_hourly_consumptions(self) -> pd.Series:

@@ -4,6 +4,7 @@ USMS constants.
 This module defines the constants for this USMS package.
 """
 
+from datetime import timedelta
 from zoneinfo import ZoneInfo
 
 from usms.models.tariff import USMSTariff, USMSTariffTier
@@ -36,3 +37,6 @@ TARIFFS = {
     "ELECTRIC": ELECTRIC_TARIFF,
     "WATER": WATER_TARIFF,
 }
+
+UPDATE_INTERVAL = timedelta(seconds=60 * 60)
+REFRESH_INTERVAL = timedelta(seconds=60 * 15)

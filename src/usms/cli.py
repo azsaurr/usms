@@ -90,7 +90,7 @@ def run_cli():  # noqa: PLR0912
             account = USMSAccount.create(args.username, args.password)
             if args.list:
                 print("Meters:")
-                for meter in account.meters:
+                for meter in account.get_meters():
                     print(f"- {meter.get_no()} ({meter.get_type()})")
 
             if args.meter:
@@ -116,7 +116,7 @@ async def handle_async(args: argparse.Namespace) -> None:
     account = await AsyncUSMSAccount.create(args.username, args.password)
     if args.list:
         print("Meters:")
-        for meter in account.meters:
+        for meter in account.get_meters():
             print(f"- {meter.get_no()} ({meter.get_type()})")
 
     if args.meter:
