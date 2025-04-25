@@ -1,3 +1,9 @@
+## v0.7.1 (2025-04-25)
+
+### Fix
+
+- set last_refresh timestamp to the current time
+
 ## v0.7.0 (2025-04-25)
 
 ### Perf
