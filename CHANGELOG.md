@@ -1,3 +1,9 @@
+## v0.7.0 (2025-04-25)
+
+### Perf
+
+- fetch account and meter info from unified page to reduce requests
+
 ## v0.6.0 (2025-04-23)
 
 ### Fix
