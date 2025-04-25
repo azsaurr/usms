@@ -30,7 +30,7 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
         self.username = username
         self.auth = USMSAuth(username, password)
 
-        self.last_refresh = datetime.min.replace(tzinfo=BRUNEI_TZ)
+        self.last_refresh = datetime.now(tz=BRUNEI_TZ)
 
         self._initialized = False
 
