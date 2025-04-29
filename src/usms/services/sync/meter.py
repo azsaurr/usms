@@ -191,8 +191,8 @@ class USMSMeter(BaseUSMSMeter):
         if self.earliest_consumption_date is not None:
             return self.earliest_consumption_date
 
+        now = datetime.now(tz=BRUNEI_TZ)
         if self.hourly_consumptions.empty:
-            now = datetime.now(tz=BRUNEI_TZ)
             for i in range(5):
                 date = datetime(
                     now.year,
@@ -220,6 +220,9 @@ class USMSMeter(BaseUSMSMeter):
                 date -= timedelta(days=step)
                 logger.info(f"[{self.no}] Stepping {step} days from {date}")
             elif step == 1:
+                if self.hourly_consumptions.empty:
+                    logger.error(f"[{self.no}] Cannot determine earliest available date")
+                    return now
                 # Already at base step, this is the earliest available data
                 date += timedelta(days=step)
                 self.earliest_consumption_date = date

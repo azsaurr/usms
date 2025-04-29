@@ -220,6 +220,9 @@ class AsyncUSMSMeter(BaseUSMSMeter):
                 date -= timedelta(days=step)
                 logger.info(f"[{self.no}] Stepping {step} days from {date}")
             elif step == 1:
+                if self.hourly_consumptions.empty:
+                    logger.error(f"[{self.no}] Cannot determine earliest available date")
+                    return now
                 # Already at base step, this is the earliest available data
                 date += timedelta(days=step)
                 self.earliest_consumption_date = date
