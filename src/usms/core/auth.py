@@ -61,8 +61,9 @@ class USMSAuth(httpx.Auth):
             response_html = lxml.html.fromstring(response.content)
             error_message = response_html.find(""".//*[@id="pcErr_lblErrMsg"]""")
             if error_message is not None:
-                logger.error(error_message.text_content())
-                raise USMSLoginError(error_message.text_content())
+                error_message = error_message.text_content()
+                logger.error(error_message)
+                raise USMSLoginError(error_message)
 
             # Extract session info from cookies
             request.cookies = response.cookies

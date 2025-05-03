@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from usms.config.constants import BRUNEI_TZ
 from usms.services.meter import BaseUSMSMeter
 from usms.utils.decorators import requires_init
 from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
@@ -70,7 +69,7 @@ class USMSMeter(BaseUSMSMeter):
             [date + timedelta(hours=hour - 1) for hour in hourly_consumptions.index]
         )
         hourly_consumptions = hourly_consumptions.asfreq("h")
-        hourly_consumptions["last_checked"] = datetime.now(tz=BRUNEI_TZ)
+        hourly_consumptions["last_checked"] = datetime.now().astimezone()
 
         self.hourly_consumptions = hourly_consumptions.combine_first(self.hourly_consumptions)
 
@@ -106,7 +105,7 @@ class USMSMeter(BaseUSMSMeter):
         )
         daily_consumptions.index = pd.to_datetime(daily_consumptions.index, format="%d/%m/%Y")
         daily_consumptions = daily_consumptions.asfreq("D")
-        daily_consumptions["last_checked"] = datetime.now(tz=BRUNEI_TZ)
+        daily_consumptions["last_checked"] = datetime.now().astimezone()
 
         if daily_consumptions.empty:
             logger.warning(f"[{self.no}] No consumptions data for : {date.year}-{date.month}")
@@ -127,7 +126,7 @@ class USMSMeter(BaseUSMSMeter):
         n=1 : data for previous month only
         n=2 : data for previous 2 months only
         """
-        date = datetime.now(tz=BRUNEI_TZ)
+        date = datetime.now().astimezone()
         for _ in range(n):
             date = date.replace(day=1)
             date = date - timedelta(days=1)
@@ -148,7 +147,7 @@ class USMSMeter(BaseUSMSMeter):
             "h",
         )[self.get_unit()]
 
-        upper_date = datetime.now(tz=BRUNEI_TZ)
+        upper_date = datetime.now().astimezone()
         lower_date = upper_date - timedelta(days=n)
         for i in range(n + 1):
             date = lower_date + timedelta(days=i)
@@ -172,7 +171,7 @@ class USMSMeter(BaseUSMSMeter):
         """Get the hourly unit consumptions for all days and months."""
         logger.debug(f"[{self.no}] Getting all hourly consumptions")
 
-        upper_date = datetime.now(tz=BRUNEI_TZ)
+        upper_date = datetime.now().astimezone()
         lower_date = self.find_earliest_consumption_date()
         range_date = (upper_date - lower_date).days + 1
         for i in range(range_date):
@@ -191,18 +190,10 @@ class USMSMeter(BaseUSMSMeter):
         if self.earliest_consumption_date is not None:
             return self.earliest_consumption_date
 
-        now = datetime.now(tz=BRUNEI_TZ)
+        now = datetime.now().astimezone()
         if self.hourly_consumptions.empty:
-            for i in range(5):
-                date = datetime(
-                    now.year,
-                    now.month,
-                    now.day - i,
-                    0,
-                    0,
-                    0,
-                    tzinfo=BRUNEI_TZ,
-                )
+            for i in range(7):
+                date = now - timedelta(days=i)
                 hourly_consumptions = self.fetch_hourly_consumptions(date)
                 if not hourly_consumptions.empty:
                     break

@@ -169,7 +169,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             .strip()
         )
         if last_update == "":
-            last_update = datetime.min.replace(tzinfo=BRUNEI_TZ)
+            last_update = datetime.fromtimestamp(0).astimezone()
         else:
             date = last_update.split()[0].split("/")
             time = last_update.split()[1].split(":")
@@ -237,7 +237,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         )
         epoch_from = date_from.replace(tzinfo=ZoneInfo("UTC")).timestamp() * 1000
 
-        now = sanitize_date(datetime.now(tz=BRUNEI_TZ))
+        now = sanitize_date(datetime.now().astimezone())
         # check if given month is still ongoing
         if date.year == now.year and date.month == now.month:
             # then get consumption up until yesterday only
@@ -287,7 +287,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         ]
         # Check if consumption for this date was already fetched
         if not day_consumption.empty:
-            now = datetime.now(tz=BRUNEI_TZ)
+            now = datetime.now().astimezone()
 
             last_checked = day_consumption["last_checked"].min()
             time_since_last_checked = now - last_checked
@@ -313,7 +313,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         ]
         # Check if consumption for this date was already fetched
         if not month_consumption.empty:
-            now = datetime.now(tz=BRUNEI_TZ)
+            now = datetime.now().astimezone()
 
             last_checked = month_consumption["last_checked"].min()
             time_since_last_checked = now - last_checked

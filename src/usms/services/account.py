@@ -6,7 +6,7 @@ from datetime import datetime
 import httpx
 import lxml.html
 
-from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, UPDATE_INTERVAL
+from usms.config.constants import REFRESH_INTERVAL, UPDATE_INTERVAL
 from usms.core.auth import USMSAuth
 from usms.exceptions.errors import USMSMeterNumberError
 from usms.models.account import USMSAccount as USMSAccountModel
@@ -30,7 +30,7 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
         self.username = username
         self.auth = USMSAuth(username, password)
 
-        self.last_refresh = datetime.now(tz=BRUNEI_TZ)
+        self.last_refresh = datetime.now().astimezone()
 
         self._initialized = False
 
@@ -114,7 +114,7 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
     @requires_init
     def get_latest_update(self) -> datetime:
         """Return the latest time a meter was updated."""
-        latest_update = datetime.min.replace(tzinfo=BRUNEI_TZ)
+        latest_update = datetime.fromtimestamp(0).astimezone()
         for meter in self.get_meters():
             latest_update = max(latest_update, meter.get_last_updated())
         return latest_update
@@ -122,7 +122,7 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
     @requires_init
     def is_update_due(self) -> bool:
         """Check if an update is due (based on last update timestamp)."""
-        now = datetime.now(tz=BRUNEI_TZ)
+        now = datetime.now().astimezone()
         latest_update = self.get_latest_update()
 
         # Interval between checking for new updates

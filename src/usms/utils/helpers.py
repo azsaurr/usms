@@ -16,7 +16,7 @@ def sanitize_date(date: datetime) -> datetime:
     # Make sure given date has timezone info
     if not date.tzinfo:
         logger.debug(f"Given date has no timezone, assuming {BRUNEI_TZ}")
-        date = date.replace(tzinfo=BRUNEI_TZ)
+    date = date.astimezone(BRUNEI_TZ)
 
     # Make sure the given day is not in the future
     if date > datetime.now(tz=BRUNEI_TZ):
@@ -44,7 +44,7 @@ def new_consumptions_dataframe(unit: str, freq: str) -> pd.DataFrame:
         ),
     )
     new_dataframe["last_checked"] = pd.to_datetime(new_dataframe["last_checked"]).dt.tz_localize(
-        BRUNEI_TZ
+        datetime.now().astimezone().tzinfo
     )
     return new_dataframe
 

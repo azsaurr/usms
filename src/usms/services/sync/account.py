@@ -4,7 +4,6 @@ from datetime import datetime
 
 import httpx
 
-from usms.config.constants import BRUNEI_TZ
 from usms.core.client import USMSClient
 from usms.services.account import BaseUSMSAccount
 from usms.services.sync.meter import USMSMeter
@@ -132,7 +131,7 @@ class USMSAccount(BaseUSMSAccount):
             logger.error(f"[{self.username}] Failed to fetch update with error: {error}")
             return False
 
-        self.last_refresh = datetime.now(tz=BRUNEI_TZ)
+        self.last_refresh = datetime.now().astimezone()
 
         for meter in fresh_info.get("meters", []):
             if meter.get("last_update") > self.get_latest_update():
