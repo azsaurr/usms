@@ -1,3 +1,10 @@
+## v0.7.2 (2025-05-05)
+
+### Fix
+
+- ensure proper timezone handling for datetime operations
+- handle edge case where no data is available yet when trying to find earliest consumption date
+
 ## v0.7.1 (2025-04-25)
 
 ### Fix
