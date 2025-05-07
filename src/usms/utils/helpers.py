@@ -65,3 +65,14 @@ async def create_ssl_context() -> ssl.SSLContext:
 
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, setup_ssl)
+
+
+def dataframe_diff(
+    old_dataframe: pd.DataFrame,
+    new_dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    """Return the diff (updated or new rows) between two dataframes."""
+    old_dataframe = old_dataframe.reindex(new_dataframe.index)
+    diff_mask = old_dataframe.ne(new_dataframe)
+    new_dataframe = new_dataframe[diff_mask.any(axis=1)]
+    return new_dataframe

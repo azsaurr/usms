@@ -32,13 +32,19 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         return self
 
     @requires_init
-    async def fetch_hourly_consumptions(self, date: datetime) -> pd.Series:
+    async def fetch_hourly_consumptions(
+        self,
+        date: datetime,
+        *,
+        force_refresh: bool = False,
+    ) -> pd.Series:
         """Fetch hourly consumptions for a given date and return as pd.Series."""
         date = sanitize_date(date)
 
-        day_consumption = self.get_hourly_consumptions(date)
-        if not day_consumption.empty:
-            return day_consumption
+        if not force_refresh:
+            day_consumption = self.get_hourly_consumptions(date)
+            if not day_consumption.empty:
+                return day_consumption
 
         logger.debug(f"[{self.no}] Fetching consumptions for: {date.date()}")
         # build payload and perform requests
@@ -77,13 +83,19 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         return hourly_consumptions[self.get_unit()]
 
     @requires_init
-    async def fetch_daily_consumptions(self, date: datetime) -> pd.Series:
+    async def fetch_daily_consumptions(
+        self,
+        date: datetime,
+        *,
+        force_refresh: bool = False,
+    ) -> pd.Series:
         """Fetch daily consumptions for a given date and return as pd.Series."""
         date = sanitize_date(date)
 
-        month_consumption = self.get_daily_consumptions(date)
-        if not month_consumption.empty:
-            return month_consumption
+        if not force_refresh:
+            month_consumption = self.get_daily_consumptions(date)
+            if not month_consumption.empty:
+                return month_consumption
 
         logger.debug(f"[{self.no}] Fetching consumptions for: {date.year}-{date.month}")
         # build payload and perform requests

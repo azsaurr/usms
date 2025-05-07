@@ -22,6 +22,40 @@ class USMSMeter(BaseUSMSMeter):
         logger.debug(f"[{self._account.username}] Initializing meter")
         self.from_json(data)
         super().initialize()
+
+        if self.db is not None:
+            hourly_consumptions = self.db.get_all_consumptions(self.id)
+            self.hourly_consumptions = pd.DataFrame(
+                hourly_consumptions,
+                columns=["timestamp", self.get_unit(), "last_checked"],
+            )
+
+            # last_checked timestamp
+            self.hourly_consumptions["last_checked"] = pd.to_datetime(
+                self.hourly_consumptions["last_checked"],
+                unit="s",
+            )
+            self.hourly_consumptions["last_checked"] = self.hourly_consumptions[
+                "last_checked"
+            ].dt.tz_localize("UTC")
+            self.hourly_consumptions["last_checked"] = self.hourly_consumptions[
+                "last_checked"
+            ].dt.tz_convert("Asia/Brunei")
+
+            # timestamp as index
+            self.hourly_consumptions["timestamp"] = pd.to_datetime(
+                self.hourly_consumptions["timestamp"],
+                unit="s",
+            )
+            self.hourly_consumptions["timestamp"] = self.hourly_consumptions[
+                "timestamp"
+            ].dt.tz_localize("UTC")
+            self.hourly_consumptions["timestamp"] = self.hourly_consumptions[
+                "timestamp"
+            ].dt.tz_convert("Asia/Brunei")
+            self.hourly_consumptions.set_index("timestamp", inplace=True)
+            self.hourly_consumptions.index.name = None
+
         logger.debug(f"[{self._account.username}] Initialized meter")
 
     @classmethod
@@ -32,13 +66,19 @@ class USMSMeter(BaseUSMSMeter):
         return self
 
     @requires_init
-    def fetch_hourly_consumptions(self, date: datetime) -> pd.Series:
+    def fetch_hourly_consumptions(
+        self,
+        date: datetime,
+        *,
+        force_refresh: bool = False,
+    ) -> pd.Series:
         """Fetch hourly consumptions for a given date and return as pd.Series."""
         date = sanitize_date(date)
 
-        day_consumption = self.get_hourly_consumptions(date)
-        if not day_consumption.empty:
-            return day_consumption
+        if not force_refresh:
+            day_consumption = self.get_hourly_consumptions(date)
+            if not day_consumption.empty:
+                return day_consumption
 
         logger.debug(f"[{self.no}] Fetching consumptions for: {date.date()}")
         # build payload and perform requests
@@ -71,19 +111,28 @@ class USMSMeter(BaseUSMSMeter):
         hourly_consumptions = hourly_consumptions.asfreq("h")
         hourly_consumptions["last_checked"] = datetime.now().astimezone()
 
+        if self.db is not None:
+            self.store_consumptions(hourly_consumptions)
+
         self.hourly_consumptions = hourly_consumptions.combine_first(self.hourly_consumptions)
 
         logger.debug(f"[{self.no}] Fetched consumptions for: {date.date()}")
         return hourly_consumptions[self.get_unit()]
 
     @requires_init
-    def fetch_daily_consumptions(self, date: datetime) -> pd.Series:
+    def fetch_daily_consumptions(
+        self,
+        date: datetime,
+        *,
+        force_refresh: bool = False,
+    ) -> pd.Series:
         """Fetch daily consumptions for a given date and return as pd.Series."""
         date = sanitize_date(date)
 
-        month_consumption = self.get_daily_consumptions(date)
-        if not month_consumption.empty:
-            return month_consumption
+        if not force_refresh:
+            month_consumption = self.get_daily_consumptions(date)
+            if not month_consumption.empty:
+                return month_consumption
 
         logger.debug(f"[{self.no}] Fetching consumptions for: {date.year}-{date.month}")
         # build payload and perform requests

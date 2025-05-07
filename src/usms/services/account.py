@@ -2,6 +2,7 @@
 
 from abc import ABC
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 import lxml.html
@@ -25,9 +26,10 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
 
     last_refresh: datetime
 
-    def __init__(self, username: str, password: str) -> None:
+    def __init__(self, username: str, password: str, db_path: Path | None = None) -> None:
         """Initialize username variable and USMSAuth object."""
         self.username = username
+        self._db_path = db_path
         self.auth = USMSAuth(username, password)
 
         self.last_refresh = datetime.now().astimezone()

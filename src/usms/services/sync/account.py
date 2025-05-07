@@ -1,12 +1,14 @@
 """Sync USMS Account Service."""
 
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 
 from usms.core.client import USMSClient
 from usms.services.account import BaseUSMSAccount
 from usms.services.sync.meter import USMSMeter
+from usms.storage.sqlite import ConsumptionDB
 from usms.utils.decorators import requires_init
 from usms.utils.logging_config import logger
 
@@ -21,6 +23,7 @@ class USMSAccount(BaseUSMSAccount):
         logger.debug(f"[{self.username}] Initializing account {self.username}")
 
         self.session = USMSClient.create(self.auth)
+        self.db = ConsumptionDB(self._db_path) if self._db_path else None
 
         data = self.fetch_info()
         self.from_json(data)
@@ -29,9 +32,9 @@ class USMSAccount(BaseUSMSAccount):
         logger.debug(f"[{self.username}] Initialized account")
 
     @classmethod
-    def create(cls, username: str, password: str) -> "USMSAccount":
+    def create(cls, username: str, password: str, db_path: Path | None = None) -> "USMSAccount":
         """Initialize and return instance of this class as an object."""
-        self = cls(username, password)
+        self = cls(username, password, db_path)
         self.initialize()
         return self
 
