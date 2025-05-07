@@ -1,3 +1,9 @@
+## v0.7.3 (2025-05-07)
+
+### Fix
+
+- assume tz-naive timestamp as local timezone
+
 ## v0.7.2 (2025-05-05)
 
 ### Fix
