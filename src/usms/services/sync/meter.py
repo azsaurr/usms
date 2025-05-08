@@ -23,8 +23,8 @@ class USMSMeter(BaseUSMSMeter):
         self.from_json(data)
         super().initialize()
 
-        if self.db is not None:
-            hourly_consumptions = self.db.get_all_consumptions(self.id)
+        if self.storage_manager is not None:
+            hourly_consumptions = self.storage_manager.get_all_consumptions(self.no)
             self.hourly_consumptions = pd.DataFrame(
                 hourly_consumptions,
                 columns=["timestamp", self.get_unit(), "last_checked"],
@@ -111,7 +111,7 @@ class USMSMeter(BaseUSMSMeter):
         hourly_consumptions = hourly_consumptions.asfreq("h")
         hourly_consumptions["last_checked"] = datetime.now().astimezone()
 
-        if self.db is not None:
+        if self.storage_manager is not None:
             self.store_consumptions(hourly_consumptions)
 
         self.hourly_consumptions = hourly_consumptions.combine_first(self.hourly_consumptions)

@@ -7,8 +7,8 @@ import httpx
 from usms.core.client import AsyncUSMSClient
 from usms.services.account import BaseUSMSAccount
 from usms.services.async_.meter import AsyncUSMSMeter
-from usms.storage.sqlite import ConsumptionDB
 from usms.utils.decorators import requires_init
+from usms.utils.helpers import get_storage
 from usms.utils.logging_config import logger
 
 
@@ -22,7 +22,7 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         logger.debug(f"[{self.username}] Initializing account {self.username}")
 
         self.session = await AsyncUSMSClient.create(self.auth)
-        self.db = ConsumptionDB(self._db_path) if self._db_path else None
+        self.storage_manager = get_storage(self._storage_type, self._storage_path)
 
         data = await self.fetch_info()
         await self.from_json(data)

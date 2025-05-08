@@ -26,10 +26,19 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
 
     last_refresh: datetime
 
-    def __init__(self, username: str, password: str, db_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        storage_type: str | None = None,
+        storage_path: Path | None = None,
+    ) -> None:
         """Initialize username variable and USMSAuth object."""
         self.username = username
-        self._db_path = db_path
+
+        self._storage_type = storage_type
+        self._storage_path = storage_path
+
         self.auth = USMSAuth(username, password)
 
         self.last_refresh = datetime.now().astimezone()

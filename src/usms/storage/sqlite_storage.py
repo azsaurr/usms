@@ -1,21 +1,19 @@
-"""Database Wrapper."""
+"""SQLite Database Wrapper."""
 
 import sqlite3
 from pathlib import Path
 
 
-class ConsumptionDB:
-    """Database Wrapper for Consumption Data."""
-
-    """"""
+class SQLiteStorage:
+    """SQLite Database Wrapper for Consumption Data."""
 
     SCHEMA = """
     CREATE TABLE IF NOT EXISTS consumption (
-        meter_id TEXT NOT NULL,
+        meter_no TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
         consumption REAL NOT NULL,
         last_checked INTEGER NOT NULL,
-        PRIMARY KEY (meter_id, timestamp)
+        PRIMARY KEY (meter_no, timestamp)
     );
     """
 
@@ -33,25 +31,25 @@ class ConsumptionDB:
 
     def insert_or_replace(
         self,
-        meter_id: str,
+        meter_no: str,
         timestamp: int,
         consumption: float,
         last_checked: int,
-    ) -> bool:
+    ) -> None:
         """Insert or replace a consumption record."""
         with self.conn:
             self.conn.execute(
                 """
                 INSERT OR REPLACE INTO consumption (
-                    meter_id, timestamp, consumption, last_checked
+                    meter_no, timestamp, consumption, last_checked
                 ) VALUES (?, ?, ?, ?)
                 """,
-                (meter_id, timestamp, consumption, last_checked),
+                (meter_no, timestamp, consumption, last_checked),
             )
 
     def get_consumption(
         self,
-        meter_id: str,
+        meter_no: str,
         timestamp: str,
     ) -> tuple[float, str] | None:
         """Retrieve a specific consumption record."""
@@ -59,26 +57,26 @@ class ConsumptionDB:
             row = self.conn.execute(
                 """
                 SELECT consumption, last_checked FROM consumption
-                WHERE meter_id = ? AND timestamp = ?
+                WHERE meter_no = ? AND timestamp = ?
                 """,
-                (meter_id, timestamp),
+                (meter_no, timestamp),
             ).fetchone()
         return row
 
     def get_all_consumptions(
         self,
-        meter_id: str,
+        meter_no: str,
     ) -> list[tuple[str, float, str]]:
-        """Retrieve all consumption records for a specific meter_id."""
+        """Retrieve all consumption records for a specific meter_no."""
         with self.conn:
             rows = self.conn.execute(
                 """
                 SELECT timestamp, consumption, last_checked
                 FROM consumption
-                WHERE meter_id = ?
+                WHERE meter_no = ?
                 ORDER BY timestamp ASC
                 """,
-                (meter_id,),
+                (meter_no,),
             ).fetchall()
         return rows
 

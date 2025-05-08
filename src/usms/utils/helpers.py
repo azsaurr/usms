@@ -3,11 +3,14 @@
 import asyncio
 import ssl
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 
 from usms.config.constants import BRUNEI_TZ, UNITS
 from usms.exceptions.errors import USMSFutureDateError, USMSInvalidParameterError
+from usms.storage.csv_storage import CSVStorage
+from usms.storage.sqlite_storage import SQLiteStorage
 from usms.utils.logging_config import logger
 
 
@@ -76,3 +79,21 @@ def dataframe_diff(
     diff_mask = old_dataframe.ne(new_dataframe)
     new_dataframe = new_dataframe[diff_mask.any(axis=1)]
     return new_dataframe
+
+
+def get_storage(
+    storage_type: str, storage_path: Path | None = None
+) -> CSVStorage | SQLiteStorage | None:
+    """Return the storage manager based on given storage type and path."""
+    if "sql" in storage_type.lower():
+        if storage_path is None:
+            return SQLiteStorage(Path("usms.db"))
+        return SQLiteStorage(storage_path)
+
+    if "csv" in storage_type.lower():
+        if storage_path is None:
+            return CSVStorage(Path("usms.csv"))
+        return CSVStorage(storage_path)
+
+    msg = "Unsupported storage type."
+    raise ValueError(msg)

@@ -36,7 +36,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         """Set initial class variables."""
         self._account = account
         self.session = account.session
-        self.db = account.db
+        self.storage_manager = account.storage_manager
 
         self._initialized = False
 
@@ -456,8 +456,8 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         new_statistics_df = dataframe_diff(self.hourly_consumptions, consumptions)
 
         for row in new_statistics_df.itertuples(index=True, name="Row"):
-            self.db.insert_or_replace(
-                meter_id=self.id,
+            self.storage_manager.insert_or_replace(
+                meter_no=self.no,
                 timestamp=int(row.Index.timestamp()),
                 consumption=getattr(row, self.get_unit()),
                 last_checked=int(row.last_checked.timestamp()),
