@@ -97,3 +97,35 @@ def get_storage(
 
     msg = "Unsupported storage type."
     raise ValueError(msg)
+
+
+def consumptions_storage_to_dataframe(
+    consumptions: list[tuple[str, float, str]],
+) -> pd.DataFrame:
+    """Convert retrieved consumptions from persistent storage to dataframe."""
+    hourly_consumptions = pd.DataFrame(
+        consumptions,
+        columns=["timestamp", "consumption", "last_checked"],
+    )
+
+    # last_checked timestamp
+    hourly_consumptions["last_checked"] = pd.to_datetime(
+        hourly_consumptions["last_checked"],
+        unit="s",
+    )
+    hourly_consumptions["last_checked"] = hourly_consumptions["last_checked"].dt.tz_localize("UTC")
+    hourly_consumptions["last_checked"] = hourly_consumptions["last_checked"].dt.tz_convert(
+        "Asia/Brunei"
+    )
+
+    # timestamp as index
+    hourly_consumptions["timestamp"] = pd.to_datetime(
+        hourly_consumptions["timestamp"],
+        unit="s",
+    )
+    hourly_consumptions["timestamp"] = hourly_consumptions["timestamp"].dt.tz_localize("UTC")
+    hourly_consumptions["timestamp"] = hourly_consumptions["timestamp"].dt.tz_convert("Asia/Brunei")
+    hourly_consumptions.set_index("timestamp", inplace=True)
+    hourly_consumptions.index.name = None
+
+    return hourly_consumptions

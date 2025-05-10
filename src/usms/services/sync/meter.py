@@ -7,7 +7,11 @@ import pandas as pd
 
 from usms.services.meter import BaseUSMSMeter
 from usms.utils.decorators import requires_init
-from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
+from usms.utils.helpers import (
+    consumptions_storage_to_dataframe,
+    new_consumptions_dataframe,
+    sanitize_date,
+)
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
@@ -24,37 +28,14 @@ class USMSMeter(BaseUSMSMeter):
         super().initialize()
 
         if self.storage_manager is not None:
-            hourly_consumptions = self.storage_manager.get_all_consumptions(self.no)
-            self.hourly_consumptions = pd.DataFrame(
-                hourly_consumptions,
-                columns=["timestamp", self.get_unit(), "last_checked"],
-            )
+            consumptions = self.storage_manager.get_all_consumptions(self.no)
+            self.hourly_consumptions = consumptions_storage_to_dataframe(consumptions)
 
-            # last_checked timestamp
-            self.hourly_consumptions["last_checked"] = pd.to_datetime(
-                self.hourly_consumptions["last_checked"],
-                unit="s",
+            self.hourly_consumptions.set_axis(
+                ["consumption", self.get_unit()],
+                axis=1,
+                inplace=True,
             )
-            self.hourly_consumptions["last_checked"] = self.hourly_consumptions[
-                "last_checked"
-            ].dt.tz_localize("UTC")
-            self.hourly_consumptions["last_checked"] = self.hourly_consumptions[
-                "last_checked"
-            ].dt.tz_convert("Asia/Brunei")
-
-            # timestamp as index
-            self.hourly_consumptions["timestamp"] = pd.to_datetime(
-                self.hourly_consumptions["timestamp"],
-                unit="s",
-            )
-            self.hourly_consumptions["timestamp"] = self.hourly_consumptions[
-                "timestamp"
-            ].dt.tz_localize("UTC")
-            self.hourly_consumptions["timestamp"] = self.hourly_consumptions[
-                "timestamp"
-            ].dt.tz_convert("Asia/Brunei")
-            self.hourly_consumptions.set_index("timestamp", inplace=True)
-            self.hourly_consumptions.index.name = None
 
         logger.debug(f"[{self._account.username}] Initialized meter")
 
