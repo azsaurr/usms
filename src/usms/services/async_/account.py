@@ -1,6 +1,8 @@
 """Async USMS Account Service."""
 
+import asyncio
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 
@@ -22,7 +24,11 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         logger.debug(f"[{self.username}] Initializing account {self.username}")
 
         self.session = await AsyncUSMSClient.create(self.auth)
-        self.storage_manager = get_storage(self._storage_type, self._storage_path)
+        self.storage_manager = await asyncio.to_thread(
+            get_storage,
+            self._storage_type,
+            self._storage_path,
+        )
 
         data = await self.fetch_info()
         await self.from_json(data)
@@ -31,9 +37,19 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         logger.debug(f"[{self.username}] Initialized account")
 
     @classmethod
-    async def create(cls, username: str, password: str) -> "AsyncUSMSAccount":
+    async def create(
+        cls,
+        username: str,
+        password: str,
+        storage_type: str | None = None,
+        storage_path: Path | None = None,
+    ) -> "AsyncUSMSAccount":
         """Initialize and return instance of this class as an object."""
-        self = cls(username, password)
+        self = cls(
+            username,
+            password,
+            storage_type,
+        )
         await self.initialize()
         return self
 

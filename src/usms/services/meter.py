@@ -13,7 +13,7 @@ import pandas as pd
 from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, TARIFFS, UNITS
 from usms.models.meter import USMSMeter as USMSMeterModel
 from usms.utils.decorators import requires_init
-from usms.utils.helpers import dataframe_diff, new_consumptions_dataframe, sanitize_date
+from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
@@ -449,16 +449,3 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
     def get_type(self) -> str:
         """Return this meter's type (Electricity or Water)."""
         return self.type
-
-    @requires_init
-    def store_consumptions(self, consumptions: pd.DataFrame) -> None:
-        """Insert consumptions in the given dataframe to the database."""
-        new_statistics_df = dataframe_diff(self.hourly_consumptions, consumptions)
-
-        for row in new_statistics_df.itertuples(index=True, name="Row"):
-            self.storage_manager.insert_or_replace(
-                meter_no=self.no,
-                timestamp=int(row.Index.timestamp()),
-                consumption=getattr(row, self.get_unit()),
-                last_checked=int(row.last_checked.timestamp()),
-            )

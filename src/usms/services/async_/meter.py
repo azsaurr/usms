@@ -1,5 +1,6 @@
 """Async USMS Meter Service."""
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -7,7 +8,12 @@ import pandas as pd
 
 from usms.services.meter import BaseUSMSMeter
 from usms.utils.decorators import requires_init
-from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
+from usms.utils.helpers import (
+    consumptions_storage_to_dataframe,
+    dataframe_diff,
+    new_consumptions_dataframe,
+    sanitize_date,
+)
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
@@ -22,6 +28,19 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         logger.debug(f"[{self._account.username}] Initializing meter")
         self.from_json(data)
         super().initialize()
+
+        if self.storage_manager is not None:
+            consumptions = await asyncio.to_thread(
+                self.storage_manager.get_all_consumptions,
+                self.no,
+            )
+            self.hourly_consumptions = consumptions_storage_to_dataframe(consumptions)
+
+            self.hourly_consumptions.rename(
+                columns={"consumption": self.get_unit()},
+                inplace=True,
+            )
+
         logger.debug(f"[{self._account.username}] Initialized meter")
 
     @classmethod
@@ -236,3 +255,17 @@ class AsyncUSMSMeter(BaseUSMSMeter):
                 date += timedelta(days=step)
                 logger.debug(f"[{self.no}] Stepped too far, going back to: {date}")
                 step /= 4  # Half the last step
+
+    @requires_init
+    async def store_consumptions(self, consumptions: pd.DataFrame) -> None:
+        """Insert consumptions in the given dataframe to the database."""
+        new_statistics_df = dataframe_diff(self.hourly_consumptions, consumptions)
+
+        for row in new_statistics_df.itertuples(index=True, name="Row"):
+            await asyncio.to_thread(
+                self.storage_manager.insert_or_replace,
+                meter_no=self.no,
+                timestamp=int(row.Index.timestamp()),
+                consumption=getattr(row, self.get_unit()),
+                last_checked=int(row.last_checked.timestamp()),
+            )
