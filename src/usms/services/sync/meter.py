@@ -31,9 +31,8 @@ class USMSMeter(BaseUSMSMeter):
             consumptions = self.storage_manager.get_all_consumptions(self.no)
             self.hourly_consumptions = consumptions_storage_to_dataframe(consumptions)
 
-            self.hourly_consumptions.set_axis(
-                ["consumption", self.get_unit()],
-                axis=1,
+            self.hourly_consumptions.rename(
+                columns={"consumption": self.get_unit()},
                 inplace=True,
             )
 
