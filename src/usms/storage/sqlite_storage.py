@@ -3,8 +3,10 @@
 import sqlite3
 from pathlib import Path
 
+from usms.storage.base_storage import BaseUSMSStorage
 
-class SQLiteStorage:
+
+class SQLiteUSMSStorage(BaseUSMSStorage):
     """SQLite Database Wrapper for Consumption Data."""
 
     SCHEMA = """

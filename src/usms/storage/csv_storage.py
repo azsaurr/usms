@@ -5,8 +5,10 @@ import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from usms.storage.base_storage import BaseUSMSStorage
 
-class CSVStorage:
+
+class CSVUSMSStorage(BaseUSMSStorage):
     """CSV Wrapper for Consumption Data."""
 
     def __init__(self, file_path: Path) -> None:
