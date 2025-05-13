@@ -1,3 +1,19 @@
+## v0.8.0 (2025-05-13)
+
+### Feat
+
+- **db**: offload sqlite and csv storage operations using asyncio.to_thread()
+- **db**: initial synchronous implementation of csv
+- **db**: initial synchronous implementation of sqlite
+
+### Fix
+
+- correctly rename dataframe column
+
+### Refactor
+
+- move conversion of consumptions to dataframe to a helper method
+
 ## v0.7.3 (2025-05-07)
 
 ### Fix
