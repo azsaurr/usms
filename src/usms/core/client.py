@@ -7,115 +7,114 @@ and receive responses with USMS pages.
 """
 
 from abc import ABC, abstractmethod
+from typing import Any
 
-import httpx
-import lxml.html
-
-from usms.core.auth import USMSAuth
-from usms.utils.decorators import requires_init
-from usms.utils.helpers import create_ssl_context
-from usms.utils.logging_config import logger
+from usms.core.protocols import HTTPClient
+from usms.core.state_manager import USMSASPStateMixin
 
 
-class BaseUSMSClient(ABC):
-    """Base HTTP client for interacting with USMS."""
+class BaseUSMSClient(ABC, USMSASPStateMixin):
+    """Base USMS Client for shared sync and async logics."""
 
     BASE_URL = "https://www.usms.com.bn/SmartMeter/"
 
-    _asp_state: dict
-
-    def __init__(self, auth: USMSAuth) -> None:
+    def __init__(self, client: HTTPClient) -> None:
         """Initialize auth for this client."""
-        self.auth = auth
-        self.ssl_context = None
+        super().__init__()  # Initialize ASPStateMixin
+        self.client = client
 
-        self._initialized = False
-
-    def initialize(self) -> None:
-        """Actual initialization logic of Client object."""
-        if self.ssl_context is None:
-            super().__init__(auth=self.auth)
-        else:
-            super().__init__(auth=self.auth, verify=self.ssl_context)
-
-        self.base_url = self.BASE_URL
-        self.http2 = True
-        self.timeout = 30
-        self.event_hooks["response"] = [self._update_asp_state]
-
-        self._asp_state = {}
-
-        self._initialized = True
-
-    @requires_init
-    def post(self, url: str, data: dict | None = None) -> httpx.Response:
-        """Send a POST request with ASP.NET hidden fields included."""
-        if data is None:
-            data = {}
-
-        # Merge stored ASP state with request data
-        if self._asp_state and data:
-            for asp_key, asp_value in self._asp_state.items():
-                if not data.get(asp_key):
-                    data[asp_key] = asp_value
-
-        return super().post(url=url, data=data)
-
-    @requires_init
-    def _extract_asp_state(self, response_content: bytes) -> None:
-        """Extract ASP.NET hidden fields from responses to maintain session state."""
-        try:
-            response_html = lxml.html.fromstring(response_content)
-
-            for hidden_input in response_html.findall(""".//input[@type="hidden"]"""):
-                if hidden_input.value:
-                    self._asp_state[hidden_input.name] = hidden_input.value
-        except Exception as error:  # noqa: BLE001
-            logger.error(f"Failed to parse ASP.NET state: {error}")
-
-    @requires_init
     @abstractmethod
-    async def _update_asp_state(self, response: httpx.Response) -> None:
-        """Extract ASP.NET hidden fields from responses to maintain session state."""
+    def get(self, url: str, data: dict | None = None) -> Any:
+        """Abstract GET method for derived clients."""
+
+    @abstractmethod
+    def post(self, url: str, data: dict | None = None) -> Any:
+        """Abstract POST method for derived clients."""
+
+    def get_username(self) -> str | None:
+        """Return the username from the client's auth."""
+        if self.client.auth is not None:
+            return getattr(self.client.auth, "_username", None)
+        return None
+
+    def _build_url(self, url: str) -> str:
+        """Ensure the URL is fully qualified."""
+        return url if url.startswith("http") else f"{self.BASE_URL}{url}"
 
 
-class USMSClient(BaseUSMSClient, httpx.Client):
+class USMSClient(BaseUSMSClient):
     """Sync HTTP client for interacting with USMS."""
 
-    @classmethod
-    def create(cls, auth: USMSAuth) -> "USMSClient":
-        """Initialize and return instance of this class as an object."""
-        self = cls(auth)
-        self.initialize()
-        return self
+    def get(self, url: str, **kwargs: Any) -> Any:
+        """Send a synchronous GET request with ASP.NET state extraction."""
+        response = self.client.get(self._build_url(url), **kwargs)
+        response.raise_for_status()
 
-    @requires_init
-    def _update_asp_state(self, response: httpx.Response) -> None:
-        """Extract ASP.NET hidden fields from responses to maintain session state."""
-        super()._extract_asp_state(response.read())
+        self._extract_asp_state(self._get_response_content(response))
+        return response
+
+    def post(self, url: str, data: dict | None = None, **kwargs: Any) -> Any:
+        """Send a synchronous POST request with ASP.NET state."""
+        data = self._inject_asp_state(data)
+        response = self.client.post(self._build_url(url), data=data, **kwargs)
+        response.raise_for_status()
+
+        self._extract_asp_state(self._get_response_content(response))
+        return response
+
+    def _get_response_content(self, response: Any) -> bytes:
+        """Safely extract response content, compatible with various client types."""
+        # httpx sync
+        if hasattr(response, "content"):
+            return response.content
+
+        # requests
+        if hasattr(response, "text"):
+            return response.text.encode("utf-8")
+
+        # http.client
+        if hasattr(response, "read") and callable(response.read):
+            return response.read()
+
+        # urllib3
+        if hasattr(response, "data"):
+            return response.data
+
+        msg = "Unable to extract response content. Unsupported client type."
+        raise ValueError(msg)
 
 
-class AsyncUSMSClient(BaseUSMSClient, httpx.AsyncClient):
+class AsyncUSMSClient(BaseUSMSClient):
     """Async HTTP client for interacting with USMS."""
 
-    async def initialize(self) -> None:
-        """Actual initialization logic of Client object."""
-        self.ssl_context = await create_ssl_context()
-        super().initialize()
+    async def get(self, url: str, **kwargs: Any) -> Any:
+        """Send an asynchronous GET request with ASP.NET state extraction."""
+        response = await self.client.get(self._build_url(url), **kwargs)
+        response.raise_for_status()
 
-    @classmethod
-    async def create(cls, auth: USMSAuth) -> "AsyncUSMSClient":
-        """Initialize and return instance of this class as an object."""
-        self = cls(auth)
-        await self.initialize()
-        return self
+        self._extract_asp_state(await self._get_response_content(response))
+        return response
 
-    @requires_init
-    async def post(self, url: str, data: dict | None = None) -> httpx.Response:
-        """Send a POST request with ASP.NET hidden fields included."""
-        return await super().post(url=url, data=data)
+    async def post(self, url: str, data: dict | None = None, **kwargs: Any) -> Any:
+        """Send an asynchronous POST request with ASP.NET state."""
+        data = self._inject_asp_state(data)
+        response = await self.client.post(self._build_url(url), data=data, **kwargs)
+        response.raise_for_status()
 
-    @requires_init
-    async def _update_asp_state(self, response: httpx.Response) -> None:
-        """Extract ASP.NET hidden fields from responses to maintain session state."""
-        super()._extract_asp_state(await response.aread())
+        self._extract_asp_state(await self._get_response_content(response))
+        return response
+
+    async def _get_response_content(self, response: Any) -> bytes:
+        """Safely extract response content, compatible with various client types."""
+        # httpx async
+        if hasattr(response, "aread"):
+            return await response.aread()
+
+        # aiohttp
+        if hasattr(response, "read"):
+            return await response.read()
+        if hasattr(response, "text") and callable(response.text):
+            return (await response.text()).encode("utf-8")
+
+        msg = "Unable to extract response content. Unsupported client type."
+        raise ValueError(msg)
