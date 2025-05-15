@@ -5,7 +5,7 @@ import lxml.html
 from usms.utils.logging_config import logger
 
 
-class USMSASPStateMixin:
+class USMSClientASPStateMixin:
     """Mixin to manage ASP.NET hidden field state."""
 
     _asp_state: dict[str, str]
@@ -13,7 +13,7 @@ class USMSASPStateMixin:
     def __init__(self) -> None:
         self._asp_state = {}
 
-    def _extract_asp_state(self, response_content: bytes) -> None:
+    def _extract_asp_state(self, response_content: bytes) -> dict[str, str]:
         """Extract ASP.NET hidden fields to maintain session state."""
         try:
             response_html = lxml.html.fromstring(response_content)
@@ -22,6 +22,7 @@ class USMSASPStateMixin:
                     self._asp_state[hidden_input.name] = hidden_input.value
         except Exception as error:  # noqa: BLE001
             logger.error(f"Failed to parse ASP.NET state: {error}")
+        return self._asp_state
 
     def _inject_asp_state(self, data: dict[str, str] | None = None) -> dict[str, str]:
         """Merge stored ASP state with request data."""
