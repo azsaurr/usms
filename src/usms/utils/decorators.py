@@ -1,9 +1,11 @@
 """USMS Decorators."""
 
+from collections.abc import Callable
+
 from usms.exceptions.errors import USMSNotInitializedError
 
 
-def requires_init(method):
+def requires_init(method: Callable) -> Callable:
     """Guard method calls until class is ready."""
 
     def wrapper(self, *args, **kwargs):

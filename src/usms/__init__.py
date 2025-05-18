@@ -6,7 +6,8 @@ fetch billing details, and more from the USMS platform.
 """
 
 from usms.config.constants import BRUNEI_TZ, TARIFFS, UNITS
-from usms.core.client import AsyncUSMSClient, USMSClient
+from usms.core.client import USMSClient
+from usms.factory import initialize_usms_account
 from usms.models.tariff import USMSTariff, USMSTariffTier
 from usms.services.async_.account import AsyncUSMSAccount
 from usms.services.async_.meter import AsyncUSMSMeter
@@ -18,11 +19,11 @@ __all__ = [
     "TARIFFS",
     "UNITS",
     "AsyncUSMSAccount",
-    "AsyncUSMSClient",
     "AsyncUSMSMeter",
     "USMSAccount",
     "USMSClient",
     "USMSMeter",
     "USMSTariff",
     "USMSTariffTier",
+    "initialize_usms_account",
 ]

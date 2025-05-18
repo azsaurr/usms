@@ -1,7 +1,5 @@
 """USMS Helper functions."""
 
-import asyncio
-import ssl
 from datetime import datetime
 from pathlib import Path
 
@@ -54,23 +52,6 @@ def new_consumptions_dataframe(unit: str, freq: str) -> pd.DataFrame:
     return new_dataframe
 
 
-async def create_ssl_context() -> ssl.SSLContext:
-    """Run SSL context creation in a thread to avoid blocking the event loop."""
-
-    def setup_ssl():
-        ctx = ssl.create_default_context()
-        try:
-            import certifi
-
-            ctx.load_verify_locations(cafile=certifi.where())
-        except ImportError:
-            pass  # fallback to system defaults
-        return ctx
-
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, setup_ssl)
-
-
 def dataframe_diff(
     old_dataframe: pd.DataFrame,
     new_dataframe: pd.DataFrame,
@@ -82,7 +63,7 @@ def dataframe_diff(
     return new_dataframe
 
 
-def get_storage(storage_type: str, storage_path: Path | None = None) -> BaseUSMSStorage:
+def get_storage_manager(storage_type: str, storage_path: Path | None = None) -> BaseUSMSStorage:
     """Return the storage manager based on given storage type and path."""
     if "sql" in storage_type.lower():
         if storage_path is None:
