@@ -1,34 +1,25 @@
 """Async USMS Account Service."""
 
-import asyncio
 from datetime import datetime
-from pathlib import Path
 
 import httpx
 
-from usms.core.client import AsyncUSMSClient
+from usms.core.client import USMSClient
 from usms.services.account import BaseUSMSAccount
 from usms.services.async_.meter import AsyncUSMSMeter
+from usms.storage.base_storage import BaseUSMSStorage
 from usms.utils.decorators import requires_init
-from usms.utils.helpers import get_storage
 from usms.utils.logging_config import logger
 
 
 class AsyncUSMSAccount(BaseUSMSAccount):
     """Async USMS Account Service that inherits BaseUSMSAccount."""
 
-    session: AsyncUSMSClient
+    session: USMSClient
 
     async def initialize(self):
         """Initialize session object, fetch account info and set class attributes."""
         logger.debug(f"[{self.username}] Initializing account {self.username}")
-
-        self.session = await AsyncUSMSClient.create(self.auth)
-        self.storage_manager = await asyncio.to_thread(
-            get_storage,
-            self._storage_type,
-            self._storage_path,
-        )
 
         data = await self.fetch_info()
         await self.from_json(data)
@@ -39,16 +30,13 @@ class AsyncUSMSAccount(BaseUSMSAccount):
     @classmethod
     async def create(
         cls,
-        username: str,
-        password: str,
-        storage_type: str | None = None,
-        storage_path: Path | None = None,
+        session: USMSClient,
+        storage_manager: BaseUSMSStorage | None = None,
     ) -> "AsyncUSMSAccount":
         """Initialize and return instance of this class as an object."""
         self = cls(
-            username,
-            password,
-            storage_type,
+            session,
+            storage_manager,
         )
         await self.initialize()
         return self

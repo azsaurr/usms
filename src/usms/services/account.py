@@ -2,18 +2,16 @@
 
 from abc import ABC
 from datetime import datetime
-from pathlib import Path
 
 import httpx
 import lxml.html
 
 from usms.config.constants import REFRESH_INTERVAL, UPDATE_INTERVAL
-from usms.core.auth import USMSAuth
+from usms.core.client import USMSClient
 from usms.exceptions.errors import USMSMeterNumberError
 from usms.models.account import USMSAccount as USMSAccountModel
-from usms.services.async_.meter import AsyncUSMSMeter
 from usms.services.meter import BaseUSMSMeter
-from usms.services.sync.meter import USMSMeter
+from usms.storage.base_storage import BaseUSMSStorage
 from usms.utils.decorators import requires_init
 from usms.utils.logging_config import logger
 
@@ -21,25 +19,20 @@ from usms.utils.logging_config import logger
 class BaseUSMSAccount(ABC, USMSAccountModel):
     """Base USMS Account Service to be inherited."""
 
-    username: str
-    auth: USMSAuth
+    session: USMSClient
 
     last_refresh: datetime
 
     def __init__(
         self,
-        username: str,
-        password: str,
-        storage_type: str | None = None,
-        storage_path: Path | None = None,
+        session: USMSClient,
+        storage_manager: BaseUSMSStorage | None = None,
     ) -> None:
         """Initialize username variable and USMSAuth object."""
-        self.username = username
+        self.session = session
+        self.storage_manager = storage_manager
 
-        self._storage_type = storage_type
-        self._storage_path = storage_path
-
-        self.auth = USMSAuth(username, password)
+        self.username = self.session._username  # noqa: SLF001
 
         self.last_refresh = datetime.now().astimezone()
 
@@ -110,12 +103,12 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
                         continue
 
     @requires_init
-    def get_meters(self) -> list[USMSMeter | AsyncUSMSMeter]:
+    def get_meters(self) -> list[BaseUSMSMeter]:
         """Return list of all meters associated with this account."""
         return self.meters
 
     @requires_init
-    def get_meter(self, meter_no: str | int) -> USMSMeter | AsyncUSMSMeter:
+    def get_meter(self, meter_no: str | int) -> BaseUSMSMeter:
         """Return meter associated with the given meter number."""
         for meter in self.get_meters():
             if str(meter_no) in (str(meter.no), (meter.id)):
