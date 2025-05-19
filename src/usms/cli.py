@@ -13,7 +13,7 @@ import os
 import sys
 from importlib.metadata import PackageNotFoundError, version
 
-from usms import AsyncUSMSAccount, USMSAccount
+from usms import initialize_usms_account
 from usms.exceptions.errors import USMSLoginError, USMSMeterNumberError
 from usms.utils.logging_config import init_console_logging, logging
 
@@ -87,7 +87,7 @@ def run_cli():  # noqa: PLR0912
 
     try:
         if args.sync:
-            account = USMSAccount.create(args.username, args.password)
+            account = initialize_usms_account.create(args.username, args.password)
             if args.list:
                 print("Meters:")
                 for meter in account.get_meters():
@@ -113,7 +113,7 @@ def run_cli():  # noqa: PLR0912
 
 async def handle_async(args: argparse.Namespace) -> None:
     """Handle all async operations."""
-    account = await AsyncUSMSAccount.create(args.username, args.password)
+    account = await initialize_usms_account.create(args.username, args.password, async_mode=True)
     if args.list:
         print("Meters:")
         for meter in account.get_meters():
