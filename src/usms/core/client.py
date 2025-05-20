@@ -44,17 +44,15 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
         return self._request_sync("get", url, **kwargs)
 
     def post(self, url: str, **kwargs: Any) -> Callable:
-        """Return a sync/async POST request method, with ASP.net states injection."""
-        data = kwargs.get("data", {})
-        data = self._inject_asp_state(data)
-        kwargs["data"] = data
+        """Return a sync/async POST request method, with ASP.net state injection."""
+        kwargs["data"] = self._inject_asp_state(kwargs.get("data", {}))
 
         if self.async_mode:
             return self._request_async("post", url, **kwargs)  # has to be awaited
         return self._request_sync("post", url, **kwargs)
 
     def _request_sync(self, http_method: str, url: str, **kwargs: Any) -> HTTPXResponseProtocol:
-        """Send sync HTTP request, with URL building, auto-reauth and ASP.net states extraction."""
+        """Send sync HTTP request, with URL building, auto-reauth and ASP.net state extraction."""
         if not url.startswith("http"):
             url = f"{self.BASE_URL}{url}"
 
@@ -75,7 +73,7 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
     async def _request_async(
         self, http_method: str, url: str, **kwargs: Any
     ) -> HTTPXResponseProtocol:
-        """Send async HTTP request, with URL building, auto-reauth and ASP.net states extraction."""
+        """Send async HTTP request, with URL building, auto-reauth and ASP.net state extraction."""
         if not url.startswith("http"):
             url = f"{self.BASE_URL}{url}"
 
@@ -92,3 +90,8 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
         self._extract_asp_state(response_content)
 
         return response
+
+    @property
+    def username(self) -> str:
+        """Account username."""
+        return self._username
