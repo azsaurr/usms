@@ -10,6 +10,8 @@ from collections.abc import Callable
 
 from usms.core.protocols import HTTPXResponseProtocol
 from usms.exceptions.errors import USMSLoginError
+from usms.parsers.asp_state_parser import ASPStateParser
+from usms.parsers.error_message_parser import ErrorMessageParser
 from usms.utils.logging_config import logger
 
 
@@ -78,41 +80,41 @@ class USMSClientAuthMixin:
     def _authenticate_sync(self) -> HTTPXResponseProtocol:
         logger.debug("Executing authentication flow...")
 
-        # First login request to get hidden ASP state
+        # Initial GET Request (Retrieve Login Page and ASP State)
         response = self.client.get(url=self.LOGIN_URL)
         response_content = response.read()
-        asp_state = self._extract_asp_state(response_content)
+
+        # Get ASP hidden states, and then add login info
+        asp_state = ASPStateParser.parse(response_content)
         asp_state["ASPxRoundPanel1$btnLogin"] = "Login"
         asp_state["ASPxRoundPanel1$txtUsername"] = self._username
         asp_state["ASPxRoundPanel1$txtPassword"] = self._password
 
-        # Perform login with credentials
+        # POST Request (Submit Login Form with Credentials)
         response = self.client.post(url=self.LOGIN_URL, data=asp_state)
+        response_content = response.read()
 
-        '''
-        # Handle authentication errors
-        response_html = lxml.html.fromstring(response.content)
-        error_message = response_html.find(""".//*[@id="pcErr_lblErrMsg"]""")
-        if error_message is not None:
-            error_message = error_message.text_content()
+        # Check for errors during login
+        error_message = ErrorMessageParser.parse(response_content).get("error_message", "")
+        if error_message:
             logger.error(error_message)
             raise USMSLoginError(error_message)
-        '''
 
         # Extract session info from cookies
         session_id = self.client.cookies["ASP.NET_SessionId"]
         self.client.headers["cookie"] = f"ASP.NET_SessionId={session_id}"
 
+        # Retrieve secondary auth mechanism Sig, embedded in a redirect URL
         sig = None
         for past_response in response.history:
             past_response_url = str(past_response.url)
             if "Sig=" in past_response_url:
                 sig = past_response_url.split("Sig=")[-1].split("&")[-1]
                 break
-
         if sig is None:
             raise USMSLoginError
 
+        # GET Request (Establish Authenticated Session with Sig)
         response = self.client.get(
             url=f"https://www.usms.com.bn/SmartMeter/LoginSession.aspx?pLoginName={self._username}&Sig={sig}"
         )
@@ -121,41 +123,41 @@ class USMSClientAuthMixin:
     async def _authenticate_async(self) -> HTTPXResponseProtocol:
         logger.debug("Executing authentication flow...")
 
-        # First login request to get hidden ASP state
+        # Initial GET Request (Retrieve Login Page and ASP State)
         response = await self.client.get(url=self.LOGIN_URL)
         response_content = await response.aread()
-        asp_state = self._extract_asp_state(response_content)
+
+        # Get ASP hidden states, and then add login info
+        asp_state = ASPStateParser.parse(response_content)
         asp_state["ASPxRoundPanel1$btnLogin"] = "Login"
         asp_state["ASPxRoundPanel1$txtUsername"] = self._username
         asp_state["ASPxRoundPanel1$txtPassword"] = self._password
 
-        # Perform login with credentials
+        # POST Request (Submit Login Form with Credentials)
         response = await self.client.post(url=self.LOGIN_URL, data=asp_state)
+        response_content = await response.aread()
 
-        '''
-        # Handle authentication errors
-        response_html = lxml.html.fromstring(response.content)
-        error_message = response_html.find(""".//*[@id="pcErr_lblErrMsg"]""")
-        if error_message is not None:
-            error_message = error_message.text_content()
+        # Check for errors during login
+        error_message = ErrorMessageParser.parse(response_content).get("error_message", "")
+        if error_message:
             logger.error(error_message)
             raise USMSLoginError(error_message)
-        '''
 
         # Extract session info from cookies
         session_id = self.client.cookies["ASP.NET_SessionId"]
         self.client.headers["cookie"] = f"ASP.NET_SessionId={session_id}"
 
+        # Retrieve secondary auth mechanism Sig, embedded in a redirect URL
         sig = None
         for past_response in response.history:
             past_response_url = str(past_response.url)
             if "Sig=" in past_response_url:
                 sig = past_response_url.split("Sig=")[-1].split("&")[-1]
                 break
-
         if sig is None:
             raise USMSLoginError
 
+        # GET Request (Establish Authenticated Session with Sig)
         response = await self.client.get(
             url=f"https://www.usms.com.bn/SmartMeter/LoginSession.aspx?pLoginName={self._username}&Sig={sig}"
         )

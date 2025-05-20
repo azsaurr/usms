@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from usms.parsers.error_message_parser import ErrorMessageParser
+from usms.parsers.meter_consumptions_parser import MeterConsumptionsParser
 from usms.services.meter import BaseUSMSMeter
 from usms.utils.decorators import requires_init
 from usms.utils.helpers import (
@@ -71,8 +73,17 @@ class USMSMeter(BaseUSMSMeter):
             f"/Report/UsageHistory?p={self.id}",
             data=payload,
         )
+        response_content = response.read()
 
-        hourly_consumptions = self.parse_hourly_consumptions(response)
+        error_message = ErrorMessageParser.parse(response_content).get("error_message")
+        if error_message == "consumption history not found.":
+            # this error message is somehow not always true
+            # ignore it for now, and check for the table properly instead
+            pass
+        elif error_message is not None and error_message != "":
+            logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
+
+        hourly_consumptions = MeterConsumptionsParser.parse(response_content)
 
         # convert dict to pd.DataFrame
         hourly_consumptions = pd.DataFrame.from_dict(
@@ -87,7 +98,7 @@ class USMSMeter(BaseUSMSMeter):
             return hourly_consumptions[self.get_unit()]
 
         hourly_consumptions.index = pd.to_datetime(
-            [date + timedelta(hours=hour - 1) for hour in hourly_consumptions.index]
+            [date + timedelta(hours=int(hour) - 1) for hour in hourly_consumptions.index]
         )
         hourly_consumptions = hourly_consumptions.asfreq("h")
         hourly_consumptions["last_checked"] = datetime.now().astimezone()
@@ -123,8 +134,13 @@ class USMSMeter(BaseUSMSMeter):
         self.session.post(f"/Report/UsageHistory?p={self.id}")
         self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
         response = self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
+        response_content = response.read()
 
-        daily_consumptions = self.parse_daily_consumptions(response)
+        error_message = ErrorMessageParser.parse(response_content).get("error_message")
+        if error_message:
+            daily_consumptions = new_consumptions_dataframe(self.get_unit(), "D")
+        else:
+            daily_consumptions = MeterConsumptionsParser.parse(response_content)
 
         # convert dict to pd.DataFrame
         daily_consumptions = pd.DataFrame.from_dict(
@@ -133,7 +149,9 @@ class USMSMeter(BaseUSMSMeter):
             orient="index",
             columns=[self.get_unit()],
         )
-        daily_consumptions.index = pd.to_datetime(daily_consumptions.index, format="%d/%m/%Y")
+        daily_consumptions.index = pd.to_datetime(
+            [f"{date.year}-{date.month:02d}-{int(day) + 1}" for day in daily_consumptions.index]
+        )
         daily_consumptions = daily_consumptions.asfreq("D")
         daily_consumptions["last_checked"] = datetime.now().astimezone()
 

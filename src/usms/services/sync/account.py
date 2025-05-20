@@ -2,9 +2,8 @@
 
 from datetime import datetime
 
-import httpx
-
 from usms.core.client import USMSClient
+from usms.parsers.account_info_parser import AccountInfoParser
 from usms.services.account import BaseUSMSAccount
 from usms.services.sync.meter import USMSMeter
 from usms.storage.base_storage import BaseUSMSStorage
@@ -41,16 +40,6 @@ class USMSAccount(BaseUSMSAccount):
         self.initialize()
         return self
 
-    def fetch_more_info(self) -> dict:
-        """Fetch account information, parse data, initialize class attributes and return as json."""
-        logger.debug(f"[{self.username}] Fetching more account details")
-
-        response = self.session.get("/AccountInfo")
-        data = self.parse_more_info(response)
-
-        logger.debug(f"[{self.username}] Fetched more account details")
-        return data
-
     def fetch_info(self) -> dict:
         """
         Fetch minimal account and meters information.
@@ -61,7 +50,8 @@ class USMSAccount(BaseUSMSAccount):
         logger.debug(f"[{self.username}] Fetching account details")
 
         response = self.session.get("/Home")
-        data = self.parse_info(response)
+        response_content = response.read()
+        data = AccountInfoParser.parse(response_content)
 
         logger.debug(f"[{self.username}] Fetched account details")
         return data
@@ -113,12 +103,8 @@ class USMSAccount(BaseUSMSAccount):
         Check if the current session is authenticated
         by sending a request without retrying or triggering auth logic.
         """
-        is_authenticated = False
-        try:
-            response = self.session.get("/AccountInfo", auth=None)
-            is_authenticated = not self.auth.is_expired(response)
-        except httpx.HTTPError as error:
-            logger.error(f"[{self.username}] Login check failed: {error}")
+        response = self.session.get("/AccountInfo", auth=None)
+        is_authenticated = not self.auth.is_expired(response)
 
         if is_authenticated:
             logger.debug(f"[{self.username}] Account is authenticated")

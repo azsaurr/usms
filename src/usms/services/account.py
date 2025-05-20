@@ -3,9 +3,6 @@
 from abc import ABC
 from datetime import datetime
 
-import httpx
-import lxml.html
-
 from usms.config.constants import REFRESH_INTERVAL, UPDATE_INTERVAL
 from usms.core.client import USMSClient
 from usms.exceptions.errors import USMSMeterNumberError
@@ -32,68 +29,15 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
         self.session = session
         self.storage_manager = storage_manager
 
-        self.username = self.session._username  # noqa: SLF001
+        self.username = self.session.username
 
         self.last_refresh = datetime.now().astimezone()
 
         self._initialized = False
 
-    @staticmethod
-    def parse_more_info(response: httpx.Response | bytes) -> dict:
-        """Parse data from account info page and return as json."""
-        if isinstance(response, httpx.Response):
-            response_html = lxml.html.fromstring(response.content)
-        elif isinstance(response, bytes):
-            response_html = lxml.html.fromstring(response)
-        else:
-            response_html = response
-
-        reg_no = response_html.find(""".//span[@id="ASPxFormLayout1_lblIDNumber"]""").text_content()
-        name = response_html.find(""".//span[@id="ASPxFormLayout1_lblName"]""").text_content()
-        contact_no = response_html.find(
-            """.//span[@id="ASPxFormLayout1_lblContactNo"]"""
-        ).text_content()
-        email = response_html.find(""".//span[@id="ASPxFormLayout1_lblEmail"]""").text_content()
-
-        return {
-            "reg_no": reg_no,
-            "name": name,
-            "contact_no": contact_no,
-            "email": email,
-        }
-
-    @staticmethod
-    def parse_info(response: httpx.Response | bytes) -> dict:
-        """Parse data from account home page and return as json."""
-        if isinstance(response, httpx.Response):
-            response_html = lxml.html.fromstring(response.content)
-        elif isinstance(response, bytes):
-            response_html = lxml.html.fromstring(response)
-        else:
-            response_html = response
-
-        name = (
-            response_html.find(""".//td[@id="ASPxCardView1_DXCardLayout0_4"]""")
-            .findall(".//td")[1]
-            .text_content()
-        )
-
-        meters = []
-        for meter_card in response_html.findall(""".//td[@class="dxcvCard"]"""):
-            meter_data = BaseUSMSMeter.parse_info(meter_card)
-            meters.append(meter_data)
-
-        return {
-            "name": name,
-            "meters": meters,
-        }
-
     def from_json(self, data: dict) -> None:
         """Initialize base attributes from a json/dict data."""
-        for key, value in data.items():
-            if key == "meters":
-                continue
-            setattr(self, key, value)
+        self.name = data.get("name", "")
 
         if hasattr(self, "meters"):
             for meter in self.get_meters():

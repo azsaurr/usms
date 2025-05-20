@@ -6,8 +6,6 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Union
 from zoneinfo import ZoneInfo
 
-import httpx
-import lxml.html
 import pandas as pd
 
 from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, TARIFFS, UNITS
@@ -49,132 +47,37 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         self.hourly_consumptions = new_consumptions_dataframe(self.get_unit(), "h")
         self.daily_consumptions = new_consumptions_dataframe(self.get_unit(), "D")
 
-    @staticmethod
-    def parse_info(response: httpx.Response | bytes) -> dict:
-        """Parse meter data from account home page and return as json."""
-        if isinstance(response, httpx.Response):
-            response_html = lxml.html.fromstring(response.content)
-        elif isinstance(response, bytes):
-            response_html = lxml.html.fromstring(response)
+    def from_json(self, data: dict) -> None:
+        """Initialize base attributes from a json/dict data."""
+        self.no = data.get("no", "")
+        if self.no:
+            self.id = base64.b64encode(self.no.encode()).decode()
         else:
-            response_html = response
+            self.id = ""
 
-        namespaces = {"re": "http://exslt.org/regular-expressions"}
+        self.type = "Water" if "Water" in data.get("type", "") else "Electricity"
 
-        no = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_2')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-        _id = base64.b64encode(no.encode()).decode()
+        self.status = data.get("status", "") == "ACTIVE"
 
-        _type = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_3')]",
-                namespaces=namespaces,
-            )[0]
-            .find(".//img")
-            .get("src")
-        )
-        _type = "Water" if "Water" in _type else "Electricity"
+        self.address = data.get("address", "")
+        self.kampong = data.get("kampong", "")
+        self.mukim = data.get("mukim", "")
+        self.district = data.get("district", "")
+        self.postcode = data.get("postcode", "")
 
-        status = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_5')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
+        self.remaining_unit = float(data.get("remaining_unit", "").split()[0].replace(",", ""))
+
+        self.remaining_credit = float(
+            data.get("remaining_credit", "").split("$")[-1].replace(",", "")
         )
 
-        address = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_6')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-        kampong = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_7')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-        mukim = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_8')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-        district = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_9')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-        postcode = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_10')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-
-        remaining_unit = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_11')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-        remaining_unit = float(remaining_unit.split()[0].replace(",", ""))
-
-        remaining_credit = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_12')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-        remaining_credit = float(remaining_credit.split("$")[-1].replace(",", ""))
-
-        last_update = (
-            response_html.xpath(
-                ".//td[re:match(@id, 'ASPxCardView1_DXCardLayout\\d+_17')]",
-                namespaces=namespaces,
-            )[0]
-            .findall(".//td")[1]
-            .text_content()
-            .strip()
-        )
-        if last_update == "":
-            last_update = datetime.fromtimestamp(0).astimezone()
+        self.last_update = data.get("last_update", "")
+        if self.last_update == "" or self.last_update is None:
+            self.last_update = datetime.fromtimestamp(0).astimezone()
         else:
-            date = last_update.split()[0].split("/")
-            time = last_update.split()[1].split(":")
-            last_update = datetime(
+            date = self.last_update.split()[0].split("/")
+            time = self.last_update.split()[1].split(":")
+            self.last_update = datetime(
                 int(date[2]),
                 int(date[1]),
                 int(date[0]),
@@ -183,26 +86,6 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
                 second=int(time[2]),
                 tzinfo=BRUNEI_TZ,
             )
-
-        return {
-            "address": address,
-            "kampong": kampong,
-            "mukim": mukim,
-            "district": district,
-            "postcode": postcode,
-            "no": no,
-            "id": _id,
-            "type": _type,
-            "remaining_unit": remaining_unit,
-            "remaining_credit": remaining_credit,
-            "last_update": last_update,
-            "status": status,
-        }
-
-    def from_json(self, data: dict) -> None:
-        """Initialize base attributes from a json/dict data."""
-        for key, value in data.items():
-            setattr(self, key, value)
 
     def _build_hourly_consumptions_payload(self, date: datetime) -> dict:
         """Build and return the payload for the hourly consumptions page from a given date."""
@@ -264,22 +147,6 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         return payload
 
-    @staticmethod
-    def parse_consumptions_error(response: httpx.Response | bytes) -> dict:
-        """Parse meter consumptions page for error messages."""
-        if isinstance(response, httpx.Response):
-            response_html = lxml.html.fromstring(response.content)
-        elif isinstance(response, bytes):
-            response_html = lxml.html.fromstring(response)
-        else:
-            response_html = response
-
-        error_message = response_html.find(""".//span[@id="pcErr_lblErrMsg"]""").text_content()
-        if error_message:
-            return {"error_message": error_message}
-
-        return {"error_message": ""}
-
     @requires_init
     def get_hourly_consumptions(self, date: datetime) -> pd.Series:
         """Check and return consumptions found for a given day."""
@@ -330,65 +197,6 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
                 logger.debug(f"[{self.no}] Found consumptions for: {date.year}-{date.month}")
                 return month_consumption[self.get_unit()]
         return new_consumptions_dataframe(self.get_unit(), "D")[self.get_unit()]
-
-    def parse_hourly_consumptions(self, response: httpx.Response | bytes) -> dict:
-        """Parse data from meter hourly consumptions page and return as json."""
-        if isinstance(response, httpx.Response):
-            response_html = lxml.html.fromstring(response.content)
-        elif isinstance(response, bytes):
-            response_html = lxml.html.fromstring(response)
-        else:
-            response_html = response
-
-        error_message = self.parse_consumptions_error(response).get("error_message")
-        if error_message == "consumption history not found.":
-            # this error message is somehow not always true
-            # ignore it for now, and check for the table properly instead
-            pass
-        elif error_message != "":
-            logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
-
-        hourly_consumptions = {}
-
-        table = response_html.find(""".//table[@id="ASPxPageControl1_grid_DXMainTable"]""")
-        if table is None:
-            return hourly_consumptions
-
-        for row in table.findall(""".//tr[@class="dxgvDataRow"]"""):
-            tds = row.findall(".//td")
-
-            hour = int(tds[0].text_content())
-            consumption = float(tds[1].text_content())
-
-            hourly_consumptions[hour] = consumption
-
-        return hourly_consumptions
-
-    def parse_daily_consumptions(self, response: httpx.Response | bytes) -> dict:
-        """Parse data from meter daily consumptions page and return as json."""
-        if isinstance(response, httpx.Response):
-            response_html = lxml.html.fromstring(response.content)
-        elif isinstance(response, bytes):
-            response_html = lxml.html.fromstring(response)
-        else:
-            response_html = response
-
-        error_message = self.parse_consumptions_error(response).get("error_message")
-        if error_message:
-            return new_consumptions_dataframe(self.get_unit(), "D")
-            # raise USMSConsumptionHistoryNotFoundError(error_message)  # noqa: ERA001
-
-        daily_consumptions = {}
-        table = response_html.find(""".//table[@id="ASPxPageControl1_grid_DXMainTable"]""")
-        for row in table.findall(""".//tr[@class="dxgvDataRow"]"""):
-            tds = row.findall(".//td")
-
-            day = str(tds[0].text_content())
-            consumption = float(tds[1].text_content())
-
-            daily_consumptions[day] = consumption
-
-        return daily_consumptions
 
     def calculate_total_consumption(self, consumptions: pd.Series) -> float:
         """Calculate the total consumption from a given pd.Series."""
