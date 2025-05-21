@@ -26,7 +26,7 @@ class SQLiteUSMSStorage(BaseUSMSStorage):
         self.conn = sqlite3.connect(self.db_path)
         self._create_schema()
 
-    def _create_schema(self):
+    def _create_schema(self) -> None:
         """Create the database schema."""
         with self.conn:
             self.conn.executescript(self.SCHEMA)

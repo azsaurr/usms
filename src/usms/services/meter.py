@@ -1,36 +1,34 @@
 """Base USMS Meter Service."""
 
-import base64
 from abc import ABC
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-import pandas as pd
-
-from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, TARIFFS, UNITS
+from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, TARIFFS
 from usms.models.meter import USMSMeter as USMSMeterModel
 from usms.utils.decorators import requires_init
 from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
-    from usms.core.client import AsyncUSMSClient, USMSClient
-    from usms.services.async_.account import AsyncUSMSAccount
-    from usms.services.sync.account import USMSAccount
+    import pandas as pd
+
+    from usms.core.client import USMSClient
+    from usms.services.account import BaseUSMSAccount
 
 
 class BaseUSMSMeter(ABC, USMSMeterModel):
     """Base USMS Meter Service to be inherited."""
 
-    _account: Union["USMSAccount", "AsyncUSMSAccount"]
-    session: Union["USMSClient", "AsyncUSMSClient"]
+    _account: "BaseUSMSAccount"
+    session: "USMSClient"
 
     earliest_consumption_date: datetime
-    hourly_consumptions: pd.DataFrame
-    daily_consumptions: pd.DataFrame
+    hourly_consumptions: "pd.DataFrame"
+    daily_consumptions: "pd.DataFrame"
 
-    def __init__(self, account: Union["USMSAccount", "AsyncUSMSAccount"]) -> None:
+    def __init__(self, account: "BaseUSMSAccount") -> None:
         """Set initial class variables."""
         self._account = account
         self.session = account.session
@@ -38,56 +36,16 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         self._initialized = False
 
-    def initialize(self):
+    def initialize(self) -> None:
         """Set initial values for class variables."""
         self.earliest_consumption_date = None
 
         self._initialized = True
 
-        self.hourly_consumptions = new_consumptions_dataframe(self.get_unit(), "h")
-        self.daily_consumptions = new_consumptions_dataframe(self.get_unit(), "D")
+        self.hourly_consumptions = new_consumptions_dataframe(self.unit, "h")
+        self.daily_consumptions = new_consumptions_dataframe(self.unit, "D")
 
-    def from_json(self, data: dict) -> None:
-        """Initialize base attributes from a json/dict data."""
-        self.no = data.get("no", "")
-        if self.no:
-            self.id = base64.b64encode(self.no.encode()).decode()
-        else:
-            self.id = ""
-
-        self.type = "Water" if "Water" in data.get("type", "") else "Electricity"
-
-        self.status = data.get("status", "") == "ACTIVE"
-
-        self.address = data.get("address", "")
-        self.kampong = data.get("kampong", "")
-        self.mukim = data.get("mukim", "")
-        self.district = data.get("district", "")
-        self.postcode = data.get("postcode", "")
-
-        self.remaining_unit = float(data.get("remaining_unit", "").split()[0].replace(",", ""))
-
-        self.remaining_credit = float(
-            data.get("remaining_credit", "").split("$")[-1].replace(",", "")
-        )
-
-        self.last_update = data.get("last_update", "")
-        if self.last_update == "" or self.last_update is None:
-            self.last_update = datetime.fromtimestamp(0).astimezone()
-        else:
-            date = self.last_update.split()[0].split("/")
-            time = self.last_update.split()[1].split(":")
-            self.last_update = datetime(
-                int(date[2]),
-                int(date[1]),
-                int(date[0]),
-                hour=int(time[0]),
-                minute=int(time[1]),
-                second=int(time[2]),
-                tzinfo=BRUNEI_TZ,
-            )
-
-    def _build_hourly_consumptions_payload(self, date: datetime) -> dict:
+    def _build_hourly_consumptions_payload(self, date: datetime) -> dict[str, str]:
         """Build and return the payload for the hourly consumptions page from a given date."""
         epoch = date.replace(tzinfo=ZoneInfo("UTC")).timestamp() * 1000
 
@@ -108,7 +66,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         return payload
 
-    def _build_daily_consumptions_payload(self, date: datetime) -> dict:
+    def _build_daily_consumptions_payload(self, date: datetime) -> dict[str, str]:
         """Build and return the payload for the daily consumptions page from a given date."""
         date_from = datetime(
             date.year,
@@ -148,7 +106,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         return payload
 
     @requires_init
-    def get_hourly_consumptions(self, date: datetime) -> pd.Series:
+    def get_hourly_consumptions(self, date: datetime) -> "pd.Series":
         """Check and return consumptions found for a given day."""
         day_consumption = self.hourly_consumptions[
             self.hourly_consumptions.index.date == date.date()
@@ -169,11 +127,11 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             ):
                 # Then just use stored data
                 logger.debug(f"[{self.no}] Found consumptions for: {date.date()}")
-                return day_consumption[self.get_unit()]
-        return new_consumptions_dataframe(self.get_unit(), "h")[self.get_unit()]
+                return day_consumption[self.unit]
+        return new_consumptions_dataframe(self.unit, "h")[self.unit]
 
     @requires_init
-    def get_daily_consumptions(self, date: datetime) -> pd.Series:
+    def get_daily_consumptions(self, date: datetime) -> "pd.Series":
         """Check and return consumptions found for a given month."""
         month_consumption = self.daily_consumptions[
             (self.daily_consumptions.index.month == date.month)
@@ -195,10 +153,10 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             ):
                 # Then just use stored data
                 logger.debug(f"[{self.no}] Found consumptions for: {date.year}-{date.month}")
-                return month_consumption[self.get_unit()]
-        return new_consumptions_dataframe(self.get_unit(), "D")[self.get_unit()]
+                return month_consumption[self.unit]
+        return new_consumptions_dataframe(self.unit, "D")[self.unit]
 
-    def calculate_total_consumption(self, consumptions: pd.Series) -> float:
+    def calculate_total_consumption(self, consumptions: "pd.Series") -> float:
         """Calculate the total consumption from a given pd.Series."""
         if consumptions.empty:
             return 0.0
@@ -206,7 +164,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         return total_consumption
 
-    def calculate_total_cost(self, consumptions: pd.Series) -> float:
+    def calculate_total_cost(self, consumptions: "pd.Series") -> float:
         """Calculate the total cost from a given pd.Series."""
         total_consumption = self.calculate_total_consumption(consumptions)
 
@@ -219,41 +177,3 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         total_cost = tariff.calculate_cost(total_consumption)
         return total_cost
-
-    @requires_init
-    def get_remaining_unit(self) -> float:
-        """Return the last recorded unit for the meter."""
-        return self.remaining_unit
-
-    @requires_init
-    def get_remaining_credit(self) -> float:
-        """Return the last recorded credit for the meter."""
-        return self.remaining_credit
-
-    @requires_init
-    def get_last_updated(self) -> datetime:
-        """Return the last update time for the meter."""
-        return self.last_update
-
-    @requires_init
-    def is_active(self) -> bool:
-        """Return True if the meter status is active."""
-        return self.status == "ACTIVE"
-
-    @requires_init
-    def get_unit(self) -> str:
-        """Return the unit for this meter type."""
-        for meter_type, meter_unit in UNITS.items():
-            if meter_type.upper() in self.type.upper():
-                return meter_unit
-        return ""
-
-    @requires_init
-    def get_no(self) -> str:
-        """Return this meter's meter no."""
-        return self.no
-
-    @requires_init
-    def get_type(self) -> str:
-        """Return this meter's type (Electricity or Water)."""
-        return self.type

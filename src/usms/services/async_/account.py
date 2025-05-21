@@ -1,6 +1,7 @@
 """Async USMS Account Service."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from usms.core.client import USMSClient
 from usms.parsers.account_info_parser import AccountInfoParser
@@ -10,27 +11,28 @@ from usms.storage.base_storage import BaseUSMSStorage
 from usms.utils.decorators import requires_init
 from usms.utils.logging_config import logger
 
+if TYPE_CHECKING:
+    from usms.storage.base_storage import BaseUSMSStorage
+
 
 class AsyncUSMSAccount(BaseUSMSAccount):
     """Async USMS Account Service that inherits BaseUSMSAccount."""
 
-    session: USMSClient
-
     async def initialize(self):
         """Initialize session object, fetch account info and set class attributes."""
-        logger.debug(f"[{self.username}] Initializing account {self.username}")
+        logger.debug(f"[{self.reg_no}] Initializing account {self.reg_no}")
 
         data = await self.fetch_info()
-        await self.from_json(data)
+        await self.update_from_json(data)
 
         self._initialized = True
-        logger.debug(f"[{self.username}] Initialized account")
+        logger.debug(f"[{self.reg_no}] Initialized account")
 
     @classmethod
     async def create(
         cls,
         session: USMSClient,
-        storage_manager: BaseUSMSStorage | None = None,
+        storage_manager: "BaseUSMSStorage" = None,
     ) -> "AsyncUSMSAccount":
         """Initialize and return instance of this class as an object."""
         self = cls(
@@ -40,27 +42,27 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         await self.initialize()
         return self
 
-    async def fetch_info(self) -> dict:
+    async def fetch_info(self) -> dict[str, str]:
         """
         Fetch minimal account and meters information.
 
         Fetch minimal account and meters information, parse data,
         initialize class attributes and return as json.
         """
-        logger.debug(f"[{self.username}] Fetching account details")
+        logger.debug(f"[{self.reg_no}] Fetching account details")
 
         response = await self.session.get("/Home")
         response_content = await response.aread()
         data = AccountInfoParser.parse(response_content)
 
-        logger.debug(f"[{self.username}] Fetched account details")
+        logger.debug(f"[{self.reg_no}] Fetched account details")
         return data
 
-    async def from_json(self, data: dict) -> None:
+    async def update_from_json(self, data: dict[str, str]) -> None:
         """Initialize base attributes from a json/dict data."""
-        super().from_json(data)
+        super().update_from_json(data)
 
-        if not hasattr(self, "meters") or self.get_meters() == []:
+        if not hasattr(self, "meters") or self.meters == []:
             self.meters = []
             for meter_data in data.get("meters", []):
                 meter = await AsyncUSMSMeter.create(self, meter_data)
@@ -69,30 +71,30 @@ class AsyncUSMSAccount(BaseUSMSAccount):
     @requires_init
     async def log_out(self) -> bool:
         """Log the user out of the USMS session by clearing session cookies."""
-        logger.debug(f"[{self.username}] Logging out {self.username}...")
+        logger.debug(f"[{self.reg_no}] Logging out {self.reg_no}...")
 
         await self.session.get("/ResLogin")
         self.session.cookies = {}
 
         if not await self.is_authenticated():
-            logger.debug(f"[{self.username}] Log out successful")
+            logger.debug(f"[{self.reg_no}] Log out successful")
             return True
 
-        logger.error(f"[{self.username}] Log out fail")
+        logger.error(f"[{self.reg_no}] Log out fail")
         return False
 
     @requires_init
     async def log_in(self) -> bool:
         """Log in the user."""
-        logger.debug(f"[{self.username}] Logging in {self.username}...")
+        logger.debug(f"[{self.reg_no}] Logging in {self.reg_no}...")
 
         await self.session.get("/AccountInfo")
 
         if await self.is_authenticated():
-            logger.debug(f"[{self.username}] Log in successful")
+            logger.debug(f"[{self.reg_no}] Log in successful")
             return True
 
-        logger.error(f"[{self.username}] Log in fail")
+        logger.error(f"[{self.reg_no}] Log in fail")
         return False
 
     @requires_init
@@ -107,31 +109,31 @@ class AsyncUSMSAccount(BaseUSMSAccount):
         is_authenticated = not self.auth.is_expired(response)
 
         if is_authenticated:
-            logger.debug(f"[{self.username}] Account is authenticated")
+            logger.debug(f"[{self.reg_no}] Account is authenticated")
         else:
-            logger.debug(f"[{self.username}] Account is NOT authenticated")
+            logger.debug(f"[{self.reg_no}] Account is NOT authenticated")
         return is_authenticated
 
     @requires_init
     async def refresh_data(self) -> bool:
         """Fetch new data and update the meter info."""
-        logger.debug(f"[{self.username}] Checking for updates")
+        logger.debug(f"[{self.reg_no}] Checking for updates")
 
         try:
             fresh_info = await self.fetch_info()
         except Exception as error:  # noqa: BLE001
-            logger.error(f"[{self.username}] Failed to fetch update with error: {error}")
+            logger.error(f"[{self.reg_no}] Failed to fetch update with error: {error}")
             return False
 
         self.last_refresh = datetime.now().astimezone()
 
         for meter in fresh_info.get("meters", []):
             if meter.get("last_update") > self.get_latest_update():
-                logger.debug(f"[{self.username}] New updates found")
-                await self.from_json(fresh_info)
+                logger.debug(f"[{self.reg_no}] New updates found")
+                await self.update_from_json(fresh_info)
                 return True
 
-        logger.debug(f"[{self.username}] No new updates found")
+        logger.debug(f"[{self.reg_no}] No new updates found")
         return False
 
     @requires_init
@@ -141,7 +143,7 @@ class AsyncUSMSAccount(BaseUSMSAccount):
             if self.is_update_due():
                 return await self.refresh_data()
         except Exception as error:  # noqa: BLE001
-            logger.error(f"[{self.username}] Failed to fetch update with error: {error}")
+            logger.error(f"[{self.reg_no}] Failed to fetch update with error: {error}")
             return False
 
         # Update not dued, data not refreshed

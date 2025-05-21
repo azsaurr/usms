@@ -8,24 +8,25 @@ and receive responses with USMS pages.
 
 import inspect
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from usms.core.auth import USMSClientAuthMixin
-from usms.core.protocols import HTTPXClientProtocol, HTTPXResponseProtocol
 from usms.core.state_manager import USMSClientASPStateMixin
+
+if TYPE_CHECKING:
+    from usms.core.protocols import HTTPXClientProtocol, HTTPXResponseProtocol
 
 
 class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
     """USMS Client for interacting with USMS."""
 
     BASE_URL = "https://www.usms.com.bn/SmartMeter/"
-    HOME_URL = "https://www.usms.com.bn/SmartMeter/Home"
 
     def __init__(
         self,
         username: str,
         password: str,
-        client: HTTPXClientProtocol,
+        client: "HTTPXClientProtocol",
     ) -> None:
         """Initialize USMS Client."""
         # Initialize mixin classes
@@ -51,7 +52,7 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
             return self._request_async("post", url, **kwargs)  # has to be awaited
         return self._request_sync("post", url, **kwargs)
 
-    def _request_sync(self, http_method: str, url: str, **kwargs: Any) -> HTTPXResponseProtocol:
+    def _request_sync(self, http_method: str, url: str, **kwargs: Any) -> "HTTPXResponseProtocol":
         """Send sync HTTP request, with URL building, auto-reauth and ASP.net state extraction."""
         if not url.startswith("http"):
             url = f"{self.BASE_URL}{url}"
@@ -72,7 +73,7 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
 
     async def _request_async(
         self, http_method: str, url: str, **kwargs: Any
-    ) -> HTTPXResponseProtocol:
+    ) -> "HTTPXResponseProtocol":
         """Send async HTTP request, with URL building, auto-reauth and ASP.net state extraction."""
         if not url.startswith("http"):
             url = f"{self.BASE_URL}{url}"

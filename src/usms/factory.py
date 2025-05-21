@@ -5,25 +5,29 @@ This module provides a factory method to create and initialize
 USMSAccount or AsyncUSMSAccount instances with flexible configuration options.
 """
 
+from typing import TYPE_CHECKING
+
 from usms.core.client import USMSClient
 from usms.core.protocols import HTTPXClientProtocol
-from usms.services.account import BaseUSMSAccount
 from usms.services.async_.account import AsyncUSMSAccount
 from usms.services.sync.account import USMSAccount
 from usms.storage.base_storage import BaseUSMSStorage
 from usms.utils.helpers import get_storage_manager
 
+if TYPE_CHECKING:
+    from usms.services.account import BaseUSMSAccount
+
 
 def initialize_usms_account(  # noqa: PLR0913
     username: str | None = None,
     password: str | None = None,
-    client: HTTPXClientProtocol | None = None,
-    usms_client: USMSClient | None = None,
+    client: "HTTPXClientProtocol" = None,
+    usms_client: "USMSClient" = None,
     storage_type: str | None = None,
     storage_path: str | None = None,
-    storage_manager: BaseUSMSStorage | None = None,
+    storage_manager: "BaseUSMSStorage" = None,
     async_mode: bool | None = None,
-) -> BaseUSMSAccount:
+) -> "BaseUSMSAccount":
     """
     Initialize and return a USMSAccount or AsyncUSMSAccount instance.
 

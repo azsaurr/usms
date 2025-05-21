@@ -7,12 +7,15 @@ with USMS accounts.
 """
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from usms.core.protocols import HTTPXResponseProtocol
 from usms.exceptions.errors import USMSLoginError
 from usms.parsers.asp_state_parser import ASPStateParser
 from usms.parsers.error_message_parser import ErrorMessageParser
 from usms.utils.logging_config import logger
+
+if TYPE_CHECKING:
+    from usms.core.protocols import HTTPXResponseProtocol
 
 
 class USMSClientAuthMixin:
@@ -29,13 +32,13 @@ class USMSClientAuthMixin:
         self._username = username
         self._password = password
 
-    def is_expired(self, response: HTTPXResponseProtocol) -> Callable:
+    def is_expired(self, response: "HTTPXResponseProtocol") -> Callable:
         """Return authentication method for the client/session."""
         if self.async_mode:
             return self._is_expired_async(response)  # has to be awaited
         return self._is_expired_sync(response)
 
-    def _is_expired_sync(self, response: HTTPXResponseProtocol) -> bool:
+    def _is_expired_sync(self, response: "HTTPXResponseProtocol") -> bool:
         """Return True if client/session is expired, based on given response."""
         response_content = response.read()
         response_text = response_content.decode("utf-8")
@@ -53,7 +56,7 @@ class USMSClientAuthMixin:
 
         return False
 
-    async def _is_expired_async(self, response: HTTPXResponseProtocol) -> bool:
+    async def _is_expired_async(self, response: "HTTPXResponseProtocol") -> bool:
         """Return True if client/session is expired, based on given response."""
         response_content = await response.aread()
         response_text = response_content.decode("utf-8")
@@ -77,7 +80,7 @@ class USMSClientAuthMixin:
             return self._authenticate_async()  # has to be awaited
         return self._authenticate_sync()
 
-    def _authenticate_sync(self) -> HTTPXResponseProtocol:
+    def _authenticate_sync(self) -> "HTTPXResponseProtocol":
         logger.debug("Executing authentication flow...")
 
         # Initial GET Request (Retrieve Login Page and ASP State)
@@ -120,7 +123,7 @@ class USMSClientAuthMixin:
         )
         logger.debug("Authentication flow complete")
 
-    async def _authenticate_async(self) -> HTTPXResponseProtocol:
+    async def _authenticate_async(self) -> "HTTPXResponseProtocol":
         logger.debug("Executing authentication flow...")
 
         # Initial GET Request (Retrieve Login Page and ASP State)
