@@ -87,7 +87,7 @@ def run_cli():  # noqa: PLR0912
 
     try:
         if args.sync:
-            account = initialize_usms_account.create(args.username, args.password)
+            account = initialize_usms_account(args.username, args.password)
             if args.list:
                 print("Meters:")
                 for meter in account.get_meters():
@@ -113,7 +113,7 @@ def run_cli():  # noqa: PLR0912
 
 async def handle_async(args: argparse.Namespace) -> None:
     """Handle all async operations."""
-    account = await initialize_usms_account.create(args.username, args.password, async_mode=True)
+    account = await initialize_usms_account(args.username, args.password, async_mode=True)
     if args.list:
         print("Meters:")
         for meter in account.get_meters():
