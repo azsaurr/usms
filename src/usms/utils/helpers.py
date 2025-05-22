@@ -6,7 +6,11 @@ from pathlib import Path
 import pandas as pd
 
 from usms.config.constants import BRUNEI_TZ, UNITS
-from usms.exceptions.errors import USMSFutureDateError, USMSInvalidParameterError
+from usms.exceptions.errors import (
+    USMSFutureDateError,
+    USMSInvalidParameterError,
+    USMSUnsupportedStorageError,
+)
 from usms.storage.base_storage import BaseUSMSStorage
 from usms.storage.csv_storage import CSVUSMSStorage
 from usms.storage.sqlite_storage import SQLiteUSMSStorage
@@ -75,8 +79,7 @@ def get_storage_manager(storage_type: str, storage_path: Path | None = None) -> 
             return CSVUSMSStorage(Path("usms.csv"))
         return CSVUSMSStorage(storage_path)
 
-    msg = "Unsupported storage type."
-    raise ValueError(msg)
+    raise USMSUnsupportedStorageError(storage_type)
 
 
 def consumptions_storage_to_dataframe(

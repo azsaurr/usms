@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from usms.core.client import USMSClient
 from usms.core.protocols import HTTPXClientProtocol
+from usms.exceptions.errors import USMSIncompatibleAsyncModeError, USMSMissingCredentialsError
 from usms.services.async_.account import AsyncUSMSAccount
 from usms.services.sync.account import USMSAccount
 from usms.storage.base_storage import BaseUSMSStorage
@@ -35,51 +36,63 @@ def initialize_usms_account(  # noqa: PLR0913
     supporting both synchronous and asynchronous modes. It allows for
     custom authentication, HTTP clients, and storage management.
 
-    Args:
-        username (str | None): Username for USMS authentication. Required if `usms_client` is not provided.
-        password (str | None): Password for USMS authentication. Required if `usms_client` is not provided.
-        client (HTTPXClientProtocol | None): A HTTPX client (sync or async) to use for USMS requests.
-        usms_client (BaseUSMSClient | None): Initialized USMSClient or AsyncUSMSClient instance.
-        storage_type (str | None): Type of storage for data persistence (e.g., 'csv', 'json').
-        storage_path (str | None): File path for the storage file (if applicable).
-        storage_manager (BaseUSMSStorage | None): A pre-initialized storage manager instance.
-        async_mode (bool | None): Whether to use asynchronous mode. If True, has to be awaited.
+    Parameters
+    ----------
+    username : str | None
+        Username for USMS authentication. Required if `usms_client` is not provided.
+    password : str | None
+        Password for USMS authentication. Required if `usms_client` is not provided.
+    client : HTTPXClientProtocol | None
+        A HTTPX client (sync or async) to use for USMS requests.
+    usms_client : BaseUSMSClient | None
+        Initialized USMSClient or AsyncUSMSClient instance.
+    storage_type : str | None
+        Type of storage for data persistence (e.g., 'csv', 'json').
+    storage_path : str | None
+        File path for the storage file (if applicable).
+    storage_manager : BaseUSMSStorage | None
+        A pre-initialized storage manager instance.
+    async_mode : bool | None
+        Whether to use asynchronous mode. If True, has to be awaited.
 
     Returns
     -------
-        USMSAccount | AsyncUSMSAccount: A fully initialized USMS account object.
+    USMSAccount | AsyncUSMSAccount
+        A fully initialized USMS account object.
 
     Raises
     ------
-        ValueError: If neither `auth` nor both `username` and `password` are provided.
+    USMSMissingCredentialsError
+        If neither `auth` nor both `username` and `password` are provided.
+    USMSIncompatibleAsyncModeError
+        If async_mode is incompatible with the provided client or client mode.
 
     Examples
     --------
-        # Synchronous usage with automatic configuration:
-        account = initialize_usms_account(username="username", password="password")
+    # Synchronous usage with automatic configuration:
+    account = initialize_usms_account(username="username", password="password")
 
-        # Asynchronous usage:
-        account = await initialize_usms_account(
-            username="username",
-            password="password",
-            async_mode=True,
-        )
+    # Asynchronous usage:
+    account = await initialize_usms_account(
+        username="username",
+        password="password",
+        async_mode=True,
+    )
 
-        # Custom client and storage:
-        import httpx
-        from usms.utils.helpers import get_storage_manager
-        storage_manager = get_storage_manager(storage_type="csv")
-        account = initialize_usms_account(
-            username="username",
-            password="password",
-            client=httpx.Client(),
-            storage_manager=storage_manager,
-        )
-    """  # noqa: W505
+    # Custom client and storage:
+    import httpx
+    from usms.utils.helpers import get_storage_manager
+    storage_manager = get_storage_manager(storage_type="csv")
+    account = initialize_usms_account(
+        username="username",
+        password="password",
+        client=httpx.Client(),
+        storage_manager=storage_manager,
+    )
+    """
     if not isinstance(usms_client, USMSClient):
         if username is None and password is None:
-            msg = "Neither `usms_client` nor both `username` and `password` are provided."
-            raise ValueError(msg)
+            raise USMSMissingCredentialsError
 
         if not isinstance(client, HTTPXClientProtocol):
             import httpx
@@ -90,8 +103,7 @@ def initialize_usms_account(  # noqa: PLR0913
 
     if async_mode is not None:
         if async_mode != usms_client.async_mode:
-            msg = "`client` or `usms_client` is incompatible with given `async_mode`."
-            raise ValueError(msg)
+            raise USMSIncompatibleAsyncModeError
     else:
         async_mode = usms_client.async_mode
 

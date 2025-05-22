@@ -73,3 +73,36 @@ class USMSNotInitializedError(Exception):
         """Initialize the exception."""
         self.message = f"{class_name} must be initialized first."
         super().__init__(self.message)
+
+
+class USMSUnsupportedStorageError(Exception):
+    """Exception raised for when an unsupported storage type is passed to BaseStorageManager."""
+
+    def __init__(self, storage_type: str) -> None:
+        """Initialize the exception."""
+        self.message = f"Unsupported storage type: {storage_type}."
+        super().__init__(self.message)
+
+
+class USMSMissingCredentialsError(Exception):
+    """Exception raised when neither usms_client nor username/password are provided."""
+
+    def __init__(
+        self,
+        message: str = "Neither `usms_client` nor both `username` and `password` are provided.",
+    ) -> None:
+        """Initialize the exception."""
+        self.message = message
+        super().__init__(self.message)
+
+
+class USMSIncompatibleAsyncModeError(Exception):
+    """Exception raised when async_mode is incompatible with the provided client or client mode."""
+
+    def __init__(
+        self,
+        message: str = "`client` or `usms_client` is incompatible with given `async_mode`.",
+    ) -> None:
+        """Initialize the exception."""
+        self.message = message
+        super().__init__(self.message)
