@@ -24,7 +24,7 @@ except PackageNotFoundError:
     usms_version = "unknown"
 
 
-def run_cli():  # noqa: PLR0912
+def run_cli() -> None:  # noqa: PLR0912
     """Run the command-line interface for USMS."""
     parser = argparse.ArgumentParser(description="USMS CLI")
 
@@ -88,19 +88,22 @@ def run_cli():  # noqa: PLR0912
     try:
         if args.sync:
             account = initialize_usms_account(args.username, args.password)
-            if args.list:
-                print("Meters:")
-                for meter in account.get_meters():
-                    print(f"- {meter.get_no()} ({meter.get_type()})")
-
-            if args.meter:
-                meter = account.get_meter(args.meter)
-                if args.unit:
-                    print(f"Unit: {meter.get_remaining_unit()} {meter.get_unit()}")
-                if args.credit:
-                    print(f"Credit: ${meter.get_remaining_credit()}")
         else:
-            asyncio.run(handle_async(args))
+            account = asyncio.run(
+                initialize_usms_account(args.username, args.password, async_mode=True)
+            )
+
+        if args.list:
+            print("Meters:")
+            for meter in account.meters:
+                print(f"- {meter.no} ({meter.type})")
+
+        if args.meter:
+            meter = account.get_meter(args.meter)
+            if args.unit:
+                print(f"Unit: {meter.remaining_unit} {meter.unit}")
+            if args.credit:
+                print(f"Credit: ${meter.remaining_credit}")
     except USMSLoginError as error:
         print(error)
         sys.exit(1)
@@ -109,22 +112,6 @@ def run_cli():  # noqa: PLR0912
         sys.exit(1)
 
     sys.exit(0)
-
-
-async def handle_async(args: argparse.Namespace) -> None:
-    """Handle all async operations."""
-    account = await initialize_usms_account(args.username, args.password, async_mode=True)
-    if args.list:
-        print("Meters:")
-        for meter in account.get_meters():
-            print(f"- {meter.get_no()} ({meter.get_type()})")
-
-    if args.meter:
-        meter = account.get_meter(args.meter)
-        if args.unit:
-            print(f"Unit: {meter.get_remaining_unit()} {meter.get_unit()}")
-        if args.credit:
-            print(f"Credit: ${meter.get_remaining_credit()}")
 
 
 if __name__ == "__main__":
