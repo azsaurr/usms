@@ -56,20 +56,22 @@ USMS_USERNAME="<ic_number>" USMS_PASSWORD="<password>" python -m usms -m <meter>
 ## Usage
 
 ```py
-from usms import USMSAccount
-from datetime import datetime
+import httpx
+
+from usms import initialize_usms_account
 
 username = "01001234" # your ic number
 password = "hunter1"
 
 # initialize the account
-account = USMSAccount.create(username, password)
+account = initialize_usms_account(
+    username=username,
+    password=password,
+    client=httpx.Client(),  # or httpx.AsyncClient(), optional
+)
 
 # print out the account information
-print(account.reg_no)
 print(account.name)
-print(account.contact_no)
-print(account.email)
 
 # print out info on all meters under the account
 for meter in account.meters:
@@ -78,29 +80,22 @@ for meter in account.meters:
     print(meter.address)
     print(meter.remaining_unit)
     print(meter.remaining_credit)
+    print(meter.unit)
 
-# get the number of the first meter
-meter_no = account.meters[0].no
+# get the number of the second meter
+meter_no = account.meters[1].no
 
 # to get info from a specific meter
 meter = account.get_meter(meter_no)
 
-# getting hourly breakdown of today's consumptions
-date = datetime.now()
-hourly_consumptions = meter.get_hourly_consumptions(date)
-print(hourly_consumptions)
+# get today's consumptions
+print(meter.get_last_n_days_hourly_consumptions(n=0))
 
-# getting daily breakdown of this month's comsumptions
-daily_consumptions = meter.get_daily_consumptions(date)
+# getting daily breakdown of last month's comsumptions
+daily_consumptions = meter.get_previous_n_month_consumptions(n=1)
 print(daily_consumptions)
-
-# get yesterday's total consumption
-date = date.replace(day=date.day-1)
-print(meter.get_total_day_consumption(date))
-
-# get last month's total cost based un total consumption
-date = date.replace(month=date.month-1)
-print(meter.get_total_month_cost(date))
+# get last month's total cost based on total consumption
+print(meter.calculate_total_cost(daily_consumptions))
 ```
 
 ## To-Do
