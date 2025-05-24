@@ -171,6 +171,7 @@ reports/
 *.pickle*
 *.xls*
 *.zip*
+*.db*
 data/
 
 # direnv
