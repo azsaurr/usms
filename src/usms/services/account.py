@@ -52,7 +52,7 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
         """Return the latest time a meter was updated."""
         latest_update = datetime.fromtimestamp(0).astimezone()
         for meter in self.meters:
-            latest_update = max(latest_update, meter.get_last_updated())
+            latest_update = max(latest_update, meter.last_update)
         return latest_update
 
     @requires_init
