@@ -1,3 +1,9 @@
+## v0.9.1 (2025-05-29)
+
+### Fix
+
+- **account**: update reference to meter class attribute after removing getter method
+
 ## v0.9.0 (2025-05-28)
 
 ### Feat
