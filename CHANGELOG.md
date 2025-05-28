@@ -1,3 +1,26 @@
+## v0.9.0 (2025-05-28)
+
+### Feat
+
+- add custom exceptions for errors in USMS account and storage manager initialization
+- add factory module to help construct instances with default injected dependencies
+
+### Fix
+
+- **cli**: fix mistake when calling initialize factory function
+- **client**: ASP.net state is now injected properly when making POST requests
+
+### Refactor
+
+- **cli**: update CLI to support changes to the codebase and use new factory initialization method
+- clean up codebase, improve type checking and setters, remove redundant getters
+- **parser**: create separate parser modules using html.parser instead of lxml
+- rename function for clarity, remove obsolete class, add missing type hint
+- **account**: replace usms_client and storage_manager initialization with dependency injection
+- **client**: focus client support on httpx only for now, while refactoring httpx.Auth to a scalable mixin instead, future-proofing for potential multi-client DI support
+- **client**: separate client logic into distinct layers and introduced dependency injection for HTTP client
+- **storage**: create BaseUSMSStorage abstract class
+
 ## v0.8.0 (2025-05-13)
 
 ### Feat
