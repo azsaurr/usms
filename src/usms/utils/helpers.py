@@ -112,3 +112,15 @@ def consumptions_storage_to_dataframe(
     hourly_consumptions.index.name = None
 
     return hourly_consumptions
+
+
+def parse_datetime(datetime_str: str) -> datetime:
+    """
+    Convert a valid given date and time string (e.g. 02/06/2025 17:30:00) into a datetime object.
+
+    Otherwise return minimum time in the local timezone.
+    """
+    try:
+        return datetime.strptime(datetime_str, "%d/%m/%Y %H:%M:%S")  # noqa: DTZ007
+    except:  # noqa: E722
+        return datetime.fromtimestamp(0).astimezone()

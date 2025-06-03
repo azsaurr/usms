@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from usms.config.constants import BRUNEI_TZ
+from usms.utils.helpers import parse_datetime
 
 
 @dataclass
@@ -53,21 +54,7 @@ class USMSMeter:
         if remaining_credit:
             self.remaining_credit = float(remaining_credit.replace(",", ""))
 
-        last_update = data.get("last_update", "")
-        if last_update:
-            date = last_update.split()[0].split("/")
-            time = last_update.split()[1].split(":")
-            self.last_update = datetime(
-                int(date[2]),
-                int(date[1]),
-                int(date[0]),
-                hour=int(time[0]),
-                minute=int(time[1]),
-                second=int(time[2]),
-                tzinfo=BRUNEI_TZ,
-            )
-        else:
-            self.last_update = datetime.fromtimestamp(0).astimezone()
+        self.last_update = parse_datetime(data.get("last_update", "")).astimezone(BRUNEI_TZ)
 
     @property
     def is_active(self) -> bool:
