@@ -1,3 +1,9 @@
+## v0.9.2 (2025-06-05)
+
+### Fix
+
+- ensure datetime string is properly parsed as datetime object, using a newly added helper function
+
 ## v0.9.1 (2025-05-29)
 
 ### Fix
