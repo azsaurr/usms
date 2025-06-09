@@ -101,7 +101,7 @@ print(meter.calculate_total_cost(daily_consumptions))
 ## To-Do
 
 * [ ] Add more test coverage
-* [ ] Support for water meter
+* [x] Support for water meter
 * [ ] Support for commercial/corporate accounts
 
 ## Contributing
