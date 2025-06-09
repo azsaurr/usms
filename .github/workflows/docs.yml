@@ -1,0 +1,66 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'  # Trigger the workflow for any tag starting with 'v'
+
+# security: restrict permissions for CI jobs.
+permissions:
+  contents: read
+
+jobs:
+  # Build the documentation and upload the static HTML files as an artifact.
+  build:
+    runs-on: ubuntu-latest
+    environment: pypi
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 23
+
+      - name: Install @devcontainers/cli
+        run: npm install --location=global @devcontainers/cli@0.73.0
+
+      - name: Start Dev Container
+        run: |
+          git config --global init.defaultBranch main
+          devcontainer up --workspace-folder .
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
+          RESOLUTION_STRATEGY: ${{ matrix.resolution-strategy }}
+
+      - name: Build Docs
+        run: devcontainer exec --workspace-folder . poe docs
+
+      - name: Upload Docs
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+        
+  # Deploy the artifact to GitHub pages.
+  # This is a separate job so that only actions/deploy-pages has the necessary permissions.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    permissions:
+      pages: write
+      id-token: write
+      
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+      
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
