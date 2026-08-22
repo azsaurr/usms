@@ -1,3 +1,38 @@
+## v1.0.0 (2026-08-22)
+
+### Feat
+
+- usms 1.0 - drop pandas, fix hourly alignment, add debt and water parity
+- **client**: raise on HTTP errors and add context-manager lifecycle
+- **tariff**: warn when costing a non-residential meter
+- **api**: export exceptions at package level and document the 0.x migration
+- **meter**: add get_all_daily_consumptions for meters without hourly data
+- **meter**: scrape debt and customer details, expose topup_url
+- **tariff**: price calculate_unit from current consumption via consumed_units
+
+### Fix
+
+- **types**: correct storage and exception annotations, declare mixin contract
+- **core**: preserve decorated method metadata and correct asp state annotation
+- **auth**: parse the Sig token as a query parameter instead of splitting the URL
+- **meter**: map hourly rows to the correct hour, fixing day spill and cache poisoning
+- **meter**: keep debt attributes off the dataclass so subclasses can add fields
+- **client**: raise on exhausted re-auth and serialise concurrent logins
+- **meter**: skip hourly fetches for water meters, which expose no hourly report
+- **helpers**: parse date-only water timestamps and always return tz-aware
+
+### Refactor
+
+- split USMSClient into separate sync and async clients
+- **meter**: rename base initialize to avoid an incompatible override
+- use lazy %-style logging, add py.typed, fix implicit Optional
+- replace pandas with plain dict consumptions and drop the dependency
+
+### Perf
+
+- **storage**: add bulk insert so backfills are not quadratic
+- **meter**: replace earliest-date backoff with a bracketed binary search
+
 ## v0.9.2 (2025-06-05)
 
 ### Fix
