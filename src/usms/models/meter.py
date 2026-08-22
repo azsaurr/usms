@@ -60,3 +60,19 @@ class USMSMeter:
     def is_active(self) -> bool:
         """Return True if the meter status is active."""
         return self.status == "ACTIVE"
+
+    @property
+    def is_water(self) -> bool:
+        """Return True if this is a water meter."""
+        return self.type == "Water"
+
+    @property
+    def supports_hourly_consumptions(self) -> bool:
+        """
+        Return True if USMS exposes hourly consumptions for this meter.
+
+        Water meters only refresh once every 24 hours, and their UsageHistory report
+        offers no "Hourly (Max 1 day)" option at all - only Monthly, Daily and Summary.
+        Requesting hourly data for one always comes back empty.
+        """
+        return not self.is_water

@@ -58,6 +58,10 @@ class USMSMeter(BaseUSMSMeter):
         """Fetch hourly consumptions for a given date and return as pd.Series."""
         date = sanitize_date(date)
 
+        if not self.supports_hourly_consumptions:
+            logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
+            return new_consumptions_dataframe(self.unit, "h")[self.unit]
+
         if not force_refresh:
             day_consumption = self.get_hourly_consumptions(date)
             if not day_consumption.empty:
@@ -195,6 +199,10 @@ class USMSMeter(BaseUSMSMeter):
             "h",
         )[self.unit]
 
+        if not self.supports_hourly_consumptions:
+            logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
+            return last_n_days_hourly_consumptions
+
         upper_date = datetime.now().astimezone()
         lower_date = upper_date - timedelta(days=n)
         for i in range(n + 1):
@@ -219,6 +227,10 @@ class USMSMeter(BaseUSMSMeter):
         """Get the hourly unit consumptions for all days and months."""
         logger.debug(f"[{self.no}] Getting all hourly consumptions")
 
+        if not self.supports_hourly_consumptions:
+            logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
+            return self.hourly_consumptions[self.unit]
+
         upper_date = datetime.now().astimezone()
         lower_date = self.find_earliest_consumption_date()
         range_date = (upper_date - lower_date).days + 1
@@ -237,6 +249,10 @@ class USMSMeter(BaseUSMSMeter):
         """Determine the earliest date for which hourly consumption data is available."""
         if self.earliest_consumption_date is not None:
             return self.earliest_consumption_date
+
+        # No hourly report exists to probe for water, so there is nothing to search.
+        if not self.supports_hourly_consumptions:
+            return self._earliest_daily_consumption_date()
 
         now = datetime.now().astimezone()
         if self.hourly_consumptions.empty:

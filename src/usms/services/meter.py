@@ -156,6 +156,21 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
                 return month_consumption[self.unit]
         return new_consumptions_dataframe(self.unit, "D")[self.unit]
 
+    def _earliest_daily_consumption_date(self) -> datetime:
+        """
+        Return the earliest date present in the daily consumptions series.
+
+        Used for meters that expose no hourly report (water): there is nothing to
+        probe for, so the earliest date we can claim is the earliest daily reading
+        already held. Nothing is cached when no data is held yet, so a later call
+        can still resolve it once daily consumptions have been fetched.
+        """
+        if self.daily_consumptions.empty:
+            return datetime.now().astimezone()
+
+        self.earliest_consumption_date = self.daily_consumptions.index.min()
+        return self.earliest_consumption_date
+
     def calculate_total_consumption(self, consumptions: "pd.Series") -> float:
         """Calculate the total consumption from a given pd.Series."""
         if consumptions.empty:
