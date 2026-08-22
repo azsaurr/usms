@@ -274,7 +274,21 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         return round(sum(consumptions.values()), 3)
 
     def calculate_total_cost(self, consumptions: dict[datetime, float]) -> float:
-        """Calculate the total cost from the given consumptions."""
+        """
+        Calculate the total cost from the given consumptions.
+
+        Only residential tariffs are known. Commercial supplies are billed on a
+        different basis entirely, so warn rather than return a confidently wrong
+        figure. `customer_type` is only populated once fetch_payment_info() has run.
+        """
+        if self.customer_type and "RESIDENTIAL" not in self.customer_type.upper():
+            logger.warning(
+                "[%s] Only residential tariffs are known, so the cost calculated for"
+                " this %s meter will not match what USMS bills",
+                self.no,
+                self.customer_type,
+            )
+
         total_consumption = self.calculate_total_consumption(consumptions)
 
         tariff = None

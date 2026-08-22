@@ -5,8 +5,10 @@ from datetime import datetime
 
 import pytest
 
+from usms.config.constants import BRUNEI_TZ
 from usms.models.meter import USMSMeter
 from usms.parsers.meter_payment_info_parser import MeterPaymentInfoParser
+from usms.services.sync.meter import USMSMeter as SyncUSMSMeter
 from usms.utils.helpers import parse_currency
 
 
@@ -153,3 +155,32 @@ def test_debt_defaults_available_before_fetch() -> None:
     assert meter.total_debt_owing == 0.0
     assert meter.customer_type is None
     assert meter.has_debt is False
+
+
+def _cost_warning_for(customer_type: str, caplog) -> str:
+    """Return whatever was logged while costing a meter of the given customer type."""
+    meter = SyncUSMSMeter.__new__(SyncUSMSMeter)
+    meter.no = "55014488"
+    meter.type = "Electricity"
+    meter.customer_type = customer_type
+    consumptions = {datetime(2026, 8, 1, tzinfo=BRUNEI_TZ): 100.0}
+
+    with caplog.at_level("WARNING", logger="usms"):
+        meter.calculate_total_cost(consumptions)
+
+    return caplog.text.lower()
+
+
+def test_cost_warns_for_non_residential_meters(caplog) -> None:
+    """
+    Test that a commercial meter warns rather than returning a wrong cost silently.
+
+    Only residential tariffs are defined; USMS bills commercial supplies per kVA of
+    capacity, which these consumption tiers cannot express.
+    """
+    assert "residential" in _cost_warning_for("Commercial", caplog)
+
+
+def test_cost_does_not_warn_for_residential_meters(caplog) -> None:
+    """Test that the ordinary residential path stays quiet."""
+    assert "residential" not in _cost_warning_for("Residential", caplog)
