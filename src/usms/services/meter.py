@@ -42,8 +42,15 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         self._initialized = False
 
-    def initialize(self) -> None:
-        """Set initial values for class variables."""
+    def _init_consumption_state(self) -> None:
+        """
+        Set initial values for the consumption caches.
+
+        Deliberately not called `initialize`: the sync and async services each define
+        an `initialize(data)` of their own, and having the base declare a no-argument
+        `initialize` made those incompatible overrides. This is only ever invoked by
+        those subclasses, so it is named for what it does instead.
+        """
         self.earliest_consumption_date = None
 
         self._initialized = True

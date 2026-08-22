@@ -27,7 +27,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         """Fetch meter info and then set initial class attributes."""
         logger.debug("[%s] Initializing meter", self._account.reg_no)
         self.update_from_json(data)
-        super().initialize()
+        self._init_consumption_state()
 
         if self.storage_manager is not None:
             consumptions = await asyncio.to_thread(
