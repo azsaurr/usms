@@ -94,12 +94,20 @@ def initialize_usms_account(  # noqa: PLR0913
         if username is None and password is None:
             raise USMSMissingCredentialsError
 
+        # Only a client we create here may be closed on the caller's behalf.
+        created_client = False
         if not isinstance(client, HTTPXClientProtocol):
             import httpx  # noqa: PLC0415  # deferred: only needed when no client is supplied
 
             client = httpx.AsyncClient(http2=True) if async_mode else httpx.Client(http2=True)
+            created_client = True
 
-        usms_client = USMSClient(client=client, username=username, password=password)
+        usms_client = USMSClient(
+            client=client,
+            username=username,
+            password=password,
+            owns_client=created_client,
+        )
 
     if async_mode is not None:
         if async_mode != usms_client.async_mode:

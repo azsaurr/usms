@@ -15,13 +15,17 @@ from typing import TYPE_CHECKING, Any
 
 from usms.core.auth import USMSClientAuthMixin
 from usms.core.state_manager import USMSClientASPStateMixin
-from usms.exceptions.errors import USMSLoginError
+from usms.exceptions.errors import USMSLoginError, USMSPageResponseError
+from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
     from usms.core.protocols import HTTPXClientProtocol, HTTPXResponseProtocol
 
 # How many times a request is retried behind a re-authentication before giving up.
 MAX_AUTH_ATTEMPTS = 3
+
+# Status codes at or above this are treated as a failed request.
+HTTP_ERROR_STATUS = 400
 
 # Multiplied by the attempt number, so retries space out instead of hammering USMS.
 REAUTH_BACKOFF = timedelta(seconds=1)
@@ -43,8 +47,17 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
         username: str,
         password: str,
         client: "HTTPXClientProtocol",
+        *,
+        owns_client: bool = False,
     ) -> None:
-        """Initialize USMS Client."""
+        """
+        Initialize USMS Client.
+
+        `owns_client` records whether this client was created for us and may
+        therefore be closed on our behalf. It stays False for a caller-supplied
+        client - Home Assistant, for one, hands over a shared client that would
+        break the rest of the application if we closed it.
+        """
         # Initialize mixin classes
         USMSClientAuthMixin.__init__(self, username=username, password=password)
         USMSClientASPStateMixin.__init__(self)
@@ -53,6 +66,7 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
         self.async_mode = inspect.iscoroutinefunction(client.get)
 
         self.client = client
+        self._owns_client = owns_client
 
         # Serialises re-authentication so concurrent callers cannot invalidate each
         # other's session. Safe to build without a running loop since Python 3.10.
@@ -93,6 +107,8 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
             # Returning here would hand the caller a login page dressed up as data.
             raise USMSLoginError(EXPIRED_SESSION_MESSAGE)
 
+        self._raise_for_status(response, url)
+
         response_content = response.read()
         self._extract_asp_state(response_content)
 
@@ -122,10 +138,35 @@ class USMSClient(USMSClientASPStateMixin, USMSClientAuthMixin):
             # Returning here would hand the caller a login page dressed up as data.
             raise USMSLoginError(EXPIRED_SESSION_MESSAGE)
 
+        self._raise_for_status(response, url)
+
         response_content = await response.aread()
         self._extract_asp_state(response_content)
 
         return response
+
+    @staticmethod
+    def _raise_for_status(response: "HTTPXResponseProtocol", url: str) -> None:
+        """
+        Raise if USMS answered with an HTTP error.
+
+        Without this an outage is indistinguishable from an empty report: the error
+        page parses to no rows, and the caller is told there is simply no consumption
+        data for that date rather than that the request failed.
+        """
+        if response.status_code >= HTTP_ERROR_STATUS:
+            logger.error("Request to %s failed with HTTP %s", url, response.status_code)
+            raise USMSPageResponseError(url)
+
+    def close(self) -> None:
+        """Close the underlying client, if this instance created it."""
+        if self._owns_client:
+            self.client.close()
+
+    async def aclose(self) -> None:
+        """Close the underlying async client, if this instance created it."""
+        if self._owns_client:
+            await self.client.aclose()
 
     @property
     def username(self) -> str:

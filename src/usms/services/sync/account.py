@@ -150,3 +150,15 @@ class USMSAccount(BaseUSMSAccount):
 
         # Update not dued, data not refreshed
         return False
+
+    def close(self) -> None:
+        """Close the underlying HTTP client, if this account created it."""
+        self.session.close()
+
+    def __enter__(self) -> "USMSAccount":  # noqa: PYI034  # typing.Self needs 3.11, this package supports 3.10
+        """Return the account for use as a context manager."""
+        return self
+
+    def __exit__(self, *exc_details: object) -> None:
+        """Close the underlying HTTP client on exit."""
+        self.close()

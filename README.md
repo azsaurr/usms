@@ -70,6 +70,11 @@ account = initialize_usms_account(
     client=httpx.Client(),  # or httpx.AsyncClient(), optional
 )
 
+# if you let the library create the client, use a context manager so it gets
+# closed. A client you pass in stays yours and is never closed for you.
+with initialize_usms_account(username=username, password=password) as account:
+    ...  # async: `async with await initialize_usms_account(..., async_mode=True)`
+
 # print out the account information
 print(account.name)
 

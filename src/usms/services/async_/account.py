@@ -151,3 +151,15 @@ class AsyncUSMSAccount(BaseUSMSAccount):
 
         # Update not dued, data not refreshed
         return False
+
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client, if this account created it."""
+        await self.session.aclose()
+
+    async def __aenter__(self) -> "AsyncUSMSAccount":  # noqa: PYI034  # typing.Self needs 3.11, this package supports 3.10
+        """Return the account for use as an async context manager."""
+        return self
+
+    async def __aexit__(self, *exc_details: object) -> None:
+        """Close the underlying HTTP client on exit."""
+        await self.aclose()
