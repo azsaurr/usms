@@ -1,4 +1,3 @@
-# ruff: noqa: PLR2004
 """Test tariff calculations."""
 
 import pytest

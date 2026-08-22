@@ -27,7 +27,7 @@ def initialize_usms_account(  # noqa: PLR0913
     storage_type: str | None = None,
     storage_path: str | None = None,
     storage_manager: "BaseUSMSStorage" = None,
-    async_mode: bool | None = None,
+    async_mode: bool | None = None,  # noqa: FBT001  # kwargs-style factory; kw-only would break callers
 ) -> "BaseUSMSAccount":
     """
     Initialize and return a USMSAccount or AsyncUSMSAccount instance.
@@ -95,7 +95,7 @@ def initialize_usms_account(  # noqa: PLR0913
             raise USMSMissingCredentialsError
 
         if not isinstance(client, HTTPXClientProtocol):
-            import httpx
+            import httpx  # noqa: PLC0415  # deferred: only needed when no client is supplied
 
             client = httpx.AsyncClient(http2=True) if async_mode else httpx.Client(http2=True)
 

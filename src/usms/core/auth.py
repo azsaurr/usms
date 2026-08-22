@@ -112,7 +112,7 @@ class USMSClientAuthMixin:
         for past_response in response.history:
             past_response_url = str(past_response.url)
             if "Sig=" in past_response_url:
-                sig = past_response_url.split("Sig=")[-1].split("&")[-1]
+                sig = past_response_url.rsplit("Sig=", maxsplit=1)[-1].rsplit("&", maxsplit=1)[-1]
                 break
         if sig is None:
             raise USMSLoginError
@@ -155,7 +155,7 @@ class USMSClientAuthMixin:
         for past_response in response.history:
             past_response_url = str(past_response.url)
             if "Sig=" in past_response_url:
-                sig = past_response_url.split("Sig=")[-1].split("&")[-1]
+                sig = past_response_url.rsplit("Sig=", maxsplit=1)[-1].rsplit("&", maxsplit=1)[-1]
                 break
         if sig is None:
             raise USMSLoginError
