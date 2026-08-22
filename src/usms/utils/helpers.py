@@ -16,6 +16,10 @@ from usms.storage.csv_storage import CSVUSMSStorage
 from usms.storage.sqlite_storage import SQLiteUSMSStorage
 from usms.utils.logging_config import logger
 
+# Date/time formats USMS uses, most specific first. Electricity meters report a full
+# timestamp; water meters refresh daily and report a bare date.
+DATETIME_FORMATS = ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y")
+
 
 def sanitize_date(date: datetime) -> datetime:
     """Check given date and attempt to sanitize it, unless its in the future."""
@@ -116,11 +120,23 @@ def consumptions_storage_to_dataframe(
 
 def parse_datetime(datetime_str: str) -> datetime:
     """
-    Convert a valid given date and time string (e.g. 02/06/2025 17:30:00) into a datetime object.
+    Convert a given date/time string from USMS into a timezone-aware datetime object.
 
-    Otherwise return minimum time in the local timezone.
+    Electricity meters report a full timestamp (e.g. 22/08/2026 08:15:00), but water
+    meters only refresh once a day and report a bare date (e.g. 21/08/2026). Trying
+    only the full format silently sent every water meter to the epoch fallback.
+
+    The result is always tz-aware; USMS reports in Brunei local time. Returning a naive
+    datetime here would make the caller's .astimezone() assume the *host* timezone,
+    which is wrong anywhere but Brunei (e.g. a UTC container).
+
+    Returns the epoch in Brunei time if the string matches no known format.
     """
-    try:
-        return datetime.strptime(datetime_str, "%d/%m/%Y %H:%M:%S")  # noqa: DTZ007
-    except:  # noqa: E722
-        return datetime.fromtimestamp(0).astimezone()
+    for datetime_format in DATETIME_FORMATS:
+        try:
+            parsed = datetime.strptime(datetime_str.strip(), datetime_format)  # noqa: DTZ007
+        except (ValueError, AttributeError):
+            continue
+        return parsed.replace(tzinfo=BRUNEI_TZ)
+
+    return datetime.fromtimestamp(0, tz=BRUNEI_TZ)
