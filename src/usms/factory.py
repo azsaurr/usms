@@ -5,9 +5,10 @@ This module provides a factory method to create and initialize
 USMSAccount or AsyncUSMSAccount instances with flexible configuration options.
 """
 
+import inspect
 from typing import TYPE_CHECKING
 
-from usms.core.client import USMSClient
+from usms.core.client import AsyncUSMSClient, BaseUSMSClient, USMSClient
 from usms.core.protocols import HTTPXClientProtocol
 from usms.exceptions.errors import USMSIncompatibleAsyncModeError, USMSMissingCredentialsError
 from usms.services.async_.account import AsyncUSMSAccount
@@ -22,12 +23,12 @@ if TYPE_CHECKING:
 def initialize_usms_account(  # noqa: PLR0913
     username: str | None = None,
     password: str | None = None,
-    client: "HTTPXClientProtocol" = None,
-    usms_client: "USMSClient" = None,
+    client: "HTTPXClientProtocol | None" = None,
+    usms_client: "BaseUSMSClient | None" = None,
     storage_type: str | None = None,
     storage_path: str | None = None,
-    storage_manager: "BaseUSMSStorage" = None,
-    async_mode: bool | None = None,
+    storage_manager: "BaseUSMSStorage | None" = None,
+    async_mode: bool | None = None,  # noqa: FBT001  # kwargs-style factory; kw-only would break callers
 ) -> "BaseUSMSAccount":
     """
     Initialize and return a USMSAccount or AsyncUSMSAccount instance.
@@ -90,16 +91,27 @@ def initialize_usms_account(  # noqa: PLR0913
         storage_manager=storage_manager,
     )
     """
-    if not isinstance(usms_client, USMSClient):
+    if not isinstance(usms_client, BaseUSMSClient):
         if username is None and password is None:
             raise USMSMissingCredentialsError
 
+        # Only a client we create here may be closed on the caller's behalf.
+        created_client = False
         if not isinstance(client, HTTPXClientProtocol):
-            import httpx
+            import httpx  # noqa: PLC0415  # deferred: only needed when no client is supplied
 
             client = httpx.AsyncClient(http2=True) if async_mode else httpx.Client(http2=True)
+            created_client = True
 
-        usms_client = USMSClient(client=client, username=username, password=password)
+        # Choose the client class from the transport actually supplied, so handing in
+        # an httpx.AsyncClient works whether or not async_mode was stated.
+        client_class = AsyncUSMSClient if inspect.iscoroutinefunction(client.get) else USMSClient
+        usms_client = client_class(
+            client=client,
+            username=username,
+            password=password,
+            owns_client=created_client,
+        )
 
     if async_mode is not None:
         if async_mode != usms_client.async_mode:

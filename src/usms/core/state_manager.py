@@ -15,8 +15,8 @@ class USMSClientASPStateMixin:
         """Extract ASP.NET hidden fields to maintain session state."""
         self._asp_state = ASPStateParser.parse(response_content)
 
-    def _inject_asp_state(self, data: dict[str, str] | None = None) -> None:
-        """Merge stored ASP state with request data."""
+    def _inject_asp_state(self, data: dict[str, str] | None = None) -> dict[str, str]:
+        """Merge stored ASP state with request data, and return the merged payload."""
         if data is None:
             data = {}
 

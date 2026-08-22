@@ -4,8 +4,8 @@ from abc import ABC
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from usms.config.constants import REFRESH_INTERVAL, UPDATE_INTERVAL
-from usms.core.client import USMSClient
+from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, UPDATE_INTERVAL
+from usms.core.client import BaseUSMSClient
 from usms.exceptions.errors import USMSMeterNumberError
 from usms.models.account import USMSAccount as USMSAccountModel
 from usms.storage.base_storage import BaseUSMSStorage
@@ -20,14 +20,14 @@ if TYPE_CHECKING:
 class BaseUSMSAccount(ABC, USMSAccountModel):
     """Base USMS Account Service to be inherited."""
 
-    session: USMSClient
+    session: BaseUSMSClient
 
     last_refresh: datetime
 
     def __init__(
         self,
-        session: USMSClient,
-        storage_manager: "BaseUSMSStorage" = None,
+        session: BaseUSMSClient,
+        storage_manager: "BaseUSMSStorage | None" = None,
     ) -> None:
         """Initialize reg_no variable and USMSAuth object."""
         self.session = session
@@ -50,7 +50,7 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
     @requires_init
     def get_latest_update(self) -> datetime:
         """Return the latest time a meter was updated."""
-        latest_update = datetime.fromtimestamp(0).astimezone()
+        latest_update = datetime.fromtimestamp(0, tz=BRUNEI_TZ)
         for meter in self.meters:
             latest_update = max(latest_update, meter.last_update)
         return latest_update
@@ -62,32 +62,32 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
         latest_update = self.get_latest_update()
 
         # Interval between checking for new updates
-        logger.debug(f"[{self.reg_no}] update_interval: {UPDATE_INTERVAL}")
-        logger.debug(f"[{self.reg_no}] refresh_interval: {REFRESH_INTERVAL}")
+        logger.debug("[%s] update_interval: %s", self.reg_no, UPDATE_INTERVAL)
+        logger.debug("[%s] refresh_interval: %s", self.reg_no, REFRESH_INTERVAL)
 
         # Elapsed time since the meter was last updated by USMS
         time_since_last_update = now - latest_update
-        logger.debug(f"[{self.reg_no}] last_update: {latest_update}")
-        logger.debug(f"[{self.reg_no}] time_since_last_update: {time_since_last_update}")
+        logger.debug("[%s] last_update: %s", self.reg_no, latest_update)
+        logger.debug("[%s] time_since_last_update: %s", self.reg_no, time_since_last_update)
 
         # Elapsed time since a refresh was last attempted
         time_since_last_refresh = now - self.last_refresh
-        logger.debug(f"[{self.reg_no}] last_refresh: {self.last_refresh}")
-        logger.debug(f"[{self.reg_no}] time_since_last_refresh: {time_since_last_refresh}")
+        logger.debug("[%s] last_refresh: %s", self.reg_no, self.last_refresh)
+        logger.debug("[%s] time_since_last_refresh: %s", self.reg_no, time_since_last_refresh)
 
         # If 60 minutes has passed since meter was last updated by USMS
         if time_since_last_update > UPDATE_INTERVAL:
-            logger.debug(f"[{self.reg_no}] time_since_last_update > update_interval")
+            logger.debug("[%s] time_since_last_update > update_interval", self.reg_no)
             # If 15 minutes has passed since a refresh was last attempted
             if time_since_last_refresh > REFRESH_INTERVAL:
-                logger.debug(f"[{self.reg_no}] time_since_last_refresh > refresh_interval")
-                logger.debug(f"[{self.reg_no}] Account is due for an update")
+                logger.debug("[%s] time_since_last_refresh > refresh_interval", self.reg_no)
+                logger.debug("[%s] Account is due for an update", self.reg_no)
                 return True
 
-            logger.debug(f"[{self.reg_no}] time_since_last_refresh < refresh_interval")
-            logger.debug(f"[{self.reg_no}] Account is NOT due for an update")
+            logger.debug("[%s] time_since_last_refresh < refresh_interval", self.reg_no)
+            logger.debug("[%s] Account is NOT due for an update", self.reg_no)
             return False
 
-        logger.debug(f"[{self.reg_no}] time_since_last_update < update_interval")
-        logger.debug(f"[{self.reg_no}] Account is NOT due for an update")
+        logger.debug("[%s] time_since_last_update < update_interval", self.reg_no)
+        logger.debug("[%s] Account is NOT due for an update", self.reg_no)
         return False

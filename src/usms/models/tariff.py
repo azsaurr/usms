@@ -42,19 +42,41 @@ class USMSTariff:
 
         return round(cost, 2)
 
-    def calculate_unit(self, cost: float) -> float:
-        """Calculate the unit received for the cost paid, according to the tariff."""
+    def calculate_unit(self, cost: float, consumed_units: float = 0.0) -> float:
+        """
+        Calculate the unit received for the cost paid, according to the tariff.
+
+        Because the tariff is progressive, the units a given credit buys depend on how
+        far into the tiers the meter already is. `consumed_units` is the consumption
+        already accrued this billing period; tiers it has used up are skipped, so the
+        credit is priced from the tier actually in effect.
+
+        With the default of 0.0 this prices from the start of the tariff, i.e. what the
+        credit would buy at the beginning of a billing period.
+
+        Note this deliberately diverges from the USMS portal, which extrapolates at a
+        flat current-tier rate and so overestimates once a credit would cross into a
+        dearer tier.
+        """
         unit = 0.0
+        unbilled_units = consumed_units
 
         for tier in self.tiers:
             bound_range = tier.upper_bound - tier.lower_bound + 1
-            bound_cost = bound_range * tier.rate
 
+            # Skip over whatever portion of this tier the existing consumption used up.
+            used_range = min(unbilled_units, bound_range)
+            unbilled_units -= used_range
+            available_range = bound_range - used_range
+            if available_range <= 0:
+                continue
+
+            bound_cost = available_range * tier.rate
             if cost <= bound_cost:
                 unit += cost / tier.rate
                 break
 
             cost -= bound_cost
-            unit += bound_range
+            unit += available_range
 
         return round(unit, 2)

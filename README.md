@@ -70,6 +70,11 @@ account = initialize_usms_account(
     client=httpx.Client(),  # or httpx.AsyncClient(), optional
 )
 
+# if you let the library create the client, use a context manager so it gets
+# closed. A client you pass in stays yours and is never closed for you.
+with initialize_usms_account(username=username, password=password) as account:
+    ...  # async: `async with await initialize_usms_account(..., async_mode=True)`
+
 # print out the account information
 print(account.name)
 
@@ -96,7 +101,46 @@ daily_consumptions = meter.get_previous_n_month_consumptions(n=1)
 print(daily_consumptions)
 # get last month's total cost based on total consumption
 print(meter.calculate_total_cost(daily_consumptions))
+
+# water meters have no hourly report, only a daily one
+if not meter.supports_hourly_consumptions:
+    print(meter.get_all_daily_consumptions())
+
+# debt and customer details, from the meter's Top Up page
+meter.fetch_payment_info()
+print(meter.customer_type, meter.total_debt_owing, meter.has_debt)
+
+# topping up cannot be automated - USMS redirects to the bank - so open this
+print(meter.topup_url)
 ```
+
+## Migrating from 0.x
+
+**Consumptions are now plain dictionaries.** Every method that returned a
+`pandas.Series` now returns a `dict[datetime, float]` keyed by the start of each
+period, and pandas is no longer a dependency at all. The keys are always
+timezone-aware and in Brunei time.
+
+```py
+# 0.x
+consumptions.empty            consumptions.sum()          consumptions.index.min()
+# 1.0
+not consumptions              sum(consumptions.values())  min(consumptions)
+```
+
+Gaps are simply absent rather than materialised as `NaN` rows, so summing and
+iterating skip them without special handling.
+
+**Hourly readings were shifted by an hour.** 0.x mapped the first row of a day's
+report to 23:00 of the *previous* day. Besides misdating every reading, that
+stray timestamp made the cache believe it already held data for the previous day,
+so fetching that day returned a single row instead of 24. If you have stored
+consumptions or imported statistics from 0.x, re-fetch them to correct both.
+
+**Other changes.** `calculate_unit()` takes an optional `consumed_units` so credit
+can be priced from the tier a meter has actually reached, rather than from zero.
+An exhausted re-authentication now raises `USMSLoginError` instead of quietly
+returning the login page as if it were data.
 
 ## To-Do
 

@@ -6,7 +6,19 @@ fetch billing details, and more from the USMS platform.
 """
 
 from usms.config.constants import BRUNEI_TZ, TARIFFS, UNITS
-from usms.core.client import USMSClient
+from usms.core.client import AsyncUSMSClient, BaseUSMSClient, USMSClient
+from usms.exceptions.errors import (
+    USMSConsumptionHistoryNotFoundError,
+    USMSFutureDateError,
+    USMSIncompatibleAsyncModeError,
+    USMSInvalidParameterError,
+    USMSLoginError,
+    USMSMeterNumberError,
+    USMSMissingCredentialsError,
+    USMSNotInitializedError,
+    USMSPageResponseError,
+    USMSUnsupportedStorageError,
+)
 from usms.factory import initialize_usms_account
 from usms.models.tariff import USMSTariff, USMSTariffTier
 from usms.services.account import BaseUSMSAccount
@@ -22,14 +34,26 @@ __all__ = [
     "TARIFFS",
     "UNITS",
     "AsyncUSMSAccount",
+    "AsyncUSMSClient",
     "AsyncUSMSMeter",
     "BaseUSMSAccount",
+    "BaseUSMSClient",
     "BaseUSMSMeter",
     "USMSAccount",
     "USMSClient",
+    "USMSConsumptionHistoryNotFoundError",
+    "USMSFutureDateError",
+    "USMSIncompatibleAsyncModeError",
+    "USMSInvalidParameterError",
+    "USMSLoginError",
     "USMSMeter",
+    "USMSMeterNumberError",
+    "USMSMissingCredentialsError",
+    "USMSNotInitializedError",
+    "USMSPageResponseError",
     "USMSTariff",
     "USMSTariffTier",
+    "USMSUnsupportedStorageError",
     "get_storage_manager",
     "initialize_usms_account",
 ]

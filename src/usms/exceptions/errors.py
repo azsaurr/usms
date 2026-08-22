@@ -9,6 +9,7 @@ by categorizing different failure scenarios.
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from datetime import datetime
 
 
@@ -60,8 +61,13 @@ class USMSConsumptionHistoryNotFoundError(Exception):
 class USMSInvalidParameterError(Exception):
     """Exception raised for when an invalid parameter is passed."""
 
-    def __init__(self, given: str, expected: str | list) -> None:
-        """Initialize the exception."""
+    def __init__(self, given: str, expected: "str | Iterable") -> None:
+        """
+        Initialize the exception.
+
+        `expected` is any iterable of the permitted values - callers pass tuples and
+        dict views as readily as lists.
+        """
         self.message = f"Given {given}, expected {expected}."
         super().__init__(self.message)
 

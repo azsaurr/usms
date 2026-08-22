@@ -14,6 +14,11 @@ BRUNEI_TZ = ZoneInfo("Asia/Brunei")
 ELECTRIC_UNIT = "kWh"
 WATER_UNIT = "m³"
 
+# Residential tariffs only, as published at https://www.usms.com.bn/web/tariffs/.
+# Commercial rates are structured differently - electricity is billed per kVA of
+# capacity and water at a flat rate per category - so they are not expressible as
+# these consumption tiers. calculate_total_cost() warns when it sees a meter that
+# is not residential.
 ELECTRIC_TARIFF = USMSTariff(
     [
         USMSTariffTier(1, 600, 0.01),
@@ -40,3 +45,12 @@ TARIFFS = {
 
 UPDATE_INTERVAL = timedelta(seconds=60 * 60)
 REFRESH_INTERVAL = timedelta(seconds=60 * 15)
+
+# Per-meter Top Up page. Payment itself redirects to the bank's secure site, so this
+# is only ever handed to the user, never submitted programmatically.
+TOPUP_URL = "https://www.usms.com.bn/SmartMeter/Payment/WebForm2"
+
+# Upper bound on how far back the earliest-date search will probe. USMS keeps hourly
+# data until the meter's commissioning date rather than for a rolling window; this is
+# only a backstop so the search cannot run away.
+MAX_HISTORY_DAYS = 1024
