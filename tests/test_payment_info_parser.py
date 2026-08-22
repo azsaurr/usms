@@ -1,5 +1,8 @@
 """Test parsing of the meter Top Up page."""
 
+from dataclasses import dataclass
+from datetime import datetime
+
 import pytest
 
 from usms.models.meter import USMSMeter
@@ -121,3 +124,32 @@ def test_topup_url_is_meter_specific() -> None:
     assert meter.topup_url == (
         "https://www.usms.com.bn/SmartMeter/Payment/WebForm2?p=NTUwMTQ0ODg=&s=h"
     )
+
+
+def test_debt_attributes_do_not_break_dataclass_subclassing() -> None:
+    """
+    Test that a subclass may still add fields without defaults.
+
+    The debt attributes are intentionally unannotated. Annotating them would make
+    them dataclass fields *with defaults*, and any subclass adding a field without
+    one would then fail with "non-default argument follows default argument".
+    ha_usms's HAUSMSMeterData does exactly that, so this guards against a change
+    here silently breaking the integration at import time.
+    """
+
+    @dataclass
+    class _Downstream(USMSMeter):
+        last_refresh: datetime
+        new_statistics: list
+        currency: str = "BND"
+
+    assert _Downstream is not None
+
+
+def test_debt_defaults_available_before_fetch() -> None:
+    """Test that debt attributes read sensibly before the Top Up page is fetched."""
+    meter = _meter()
+
+    assert meter.total_debt_owing == 0.0
+    assert meter.customer_type is None
+    assert meter.has_debt is False

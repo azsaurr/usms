@@ -32,14 +32,20 @@ class USMSMeter:
 
     status: str
 
-    """Details from the meter's Top Up page, populated by fetch_payment_info()."""
-    customer_type: str | None = None
-    debt_clearance_model: str | None = None
-    total_debt_owing: float = 0.0
-    monthly_debt_amount: float = 0.0
-    debt_balance_remaining: float = 0.0
-    debt_repayment_period: str | None = None
-    debt_period_remaining: str | None = None
+    # Details from the meter's Top Up page, populated by fetch_payment_info().
+    #
+    # Deliberately NOT annotated: an annotation would make these dataclass fields
+    # with defaults, and every subclass that adds a non-default field would then
+    # fail with "non-default argument follows default argument" - which is exactly
+    # what ha_usms's HAUSMSMeterData does. Unannotated attributes are ignored by
+    # @dataclass while still providing a fallback until the page is fetched.
+    customer_type = None
+    debt_clearance_model = None
+    total_debt_owing = 0.0
+    monthly_debt_amount = 0.0
+    debt_balance_remaining = 0.0
+    debt_repayment_period = None
+    debt_period_remaining = None
 
     def update_from_json(self, data: dict[str, str]) -> None:
         """Update base attributes from a json/dict data."""
