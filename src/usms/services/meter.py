@@ -122,12 +122,20 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
         Parse an hourly UsageHistory response into a consumptions mapping.
 
         Shared verbatim by the sync and async services, which differ only in how the
-        response body is read. Hours are reported 1-24, keyed to the start of the hour.
+        response body is read.
+
+        The parser yields zero-based row indices, not the hour labels shown in the
+        report: row 0 is the row labelled "1", which is the 00:00-01:00 slot. Mapping
+        row N to the start of hour N therefore keeps every reading inside the day that
+        was requested. Subtracting one - as this used to - pushed the first reading
+        back to 23:00 of the previous day, which both misdated it and poisoned the
+        cache: a later fetch for that previous day found the stray timestamp, decided
+        it already held data, and returned a single row instead of the full 24.
         """
         self._log_consumptions_error(response_content)
 
         return {
-            date + timedelta(hours=int(hour) - 1): float(consumption)
+            date + timedelta(hours=int(hour)): float(consumption)
             for hour, consumption in MeterConsumptionsParser.parse(response_content).items()
         }
 
