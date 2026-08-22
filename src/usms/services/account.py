@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, UPDATE_INTERVAL
-from usms.core.client import USMSClient
+from usms.core.client import BaseUSMSClient
 from usms.exceptions.errors import USMSMeterNumberError
 from usms.models.account import USMSAccount as USMSAccountModel
 from usms.storage.base_storage import BaseUSMSStorage
@@ -20,13 +20,13 @@ if TYPE_CHECKING:
 class BaseUSMSAccount(ABC, USMSAccountModel):
     """Base USMS Account Service to be inherited."""
 
-    session: USMSClient
+    session: BaseUSMSClient
 
     last_refresh: datetime
 
     def __init__(
         self,
-        session: USMSClient,
+        session: BaseUSMSClient,
         storage_manager: "BaseUSMSStorage | None" = None,
     ) -> None:
         """Initialize reg_no variable and USMSAuth object."""

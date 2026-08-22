@@ -15,7 +15,7 @@ from usms.utils.helpers import new_consumptions, sanitize_date
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
-    from usms.core.client import USMSClient
+    from usms.core.client import BaseUSMSClient
     from usms.services.account import BaseUSMSAccount
 
 
@@ -23,7 +23,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
     """Base USMS Meter Service to be inherited."""
 
     _account: "BaseUSMSAccount"
-    session: "USMSClient"
+    session: "BaseUSMSClient"
 
     earliest_consumption_date: datetime
 

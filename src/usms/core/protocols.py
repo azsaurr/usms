@@ -44,6 +44,12 @@ class HTTPXClientProtocol(Protocol):
     def post(self, url: str, **kwargs: Any) -> HTTPXResponseProtocol:
         """Make a POST request."""
 
+    def close(self) -> None:
+        """Close the client and release its connection pool."""
+
+    async def aclose(self) -> None:
+        """Close the async client and release its connection pool."""
+
     @property
     def cookies(self) -> Any:
         """Cookie values to include when sending requests."""

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from usms.config.constants import BRUNEI_TZ
-from usms.core.client import USMSClient
+from usms.core.client import AsyncUSMSClient
 from usms.parsers.account_info_parser import AccountInfoParser
 from usms.services.account import BaseUSMSAccount
 from usms.services.async_.meter import AsyncUSMSMeter
@@ -33,7 +33,7 @@ class AsyncUSMSAccount(BaseUSMSAccount):
     @classmethod
     async def create(
         cls,
-        session: USMSClient,
+        session: AsyncUSMSClient,
         storage_manager: "BaseUSMSStorage | None" = None,
     ) -> "AsyncUSMSAccount":
         """Initialize and return instance of this class as an object."""

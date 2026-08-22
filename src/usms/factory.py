@@ -5,9 +5,10 @@ This module provides a factory method to create and initialize
 USMSAccount or AsyncUSMSAccount instances with flexible configuration options.
 """
 
+import inspect
 from typing import TYPE_CHECKING
 
-from usms.core.client import USMSClient
+from usms.core.client import AsyncUSMSClient, BaseUSMSClient, USMSClient
 from usms.core.protocols import HTTPXClientProtocol
 from usms.exceptions.errors import USMSIncompatibleAsyncModeError, USMSMissingCredentialsError
 from usms.services.async_.account import AsyncUSMSAccount
@@ -23,7 +24,7 @@ def initialize_usms_account(  # noqa: PLR0913
     username: str | None = None,
     password: str | None = None,
     client: "HTTPXClientProtocol | None" = None,
-    usms_client: "USMSClient | None" = None,
+    usms_client: "BaseUSMSClient | None" = None,
     storage_type: str | None = None,
     storage_path: str | None = None,
     storage_manager: "BaseUSMSStorage | None" = None,
@@ -90,7 +91,7 @@ def initialize_usms_account(  # noqa: PLR0913
         storage_manager=storage_manager,
     )
     """
-    if not isinstance(usms_client, USMSClient):
+    if not isinstance(usms_client, BaseUSMSClient):
         if username is None and password is None:
             raise USMSMissingCredentialsError
 
@@ -102,7 +103,10 @@ def initialize_usms_account(  # noqa: PLR0913
             client = httpx.AsyncClient(http2=True) if async_mode else httpx.Client(http2=True)
             created_client = True
 
-        usms_client = USMSClient(
+        # Choose the client class from the transport actually supplied, so handing in
+        # an httpx.AsyncClient works whether or not async_mode was stated.
+        client_class = AsyncUSMSClient if inspect.iscoroutinefunction(client.get) else USMSClient
+        usms_client = client_class(
             client=client,
             username=username,
             password=password,

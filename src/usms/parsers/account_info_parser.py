@@ -1,6 +1,7 @@
 """Account Information Parser Module."""
 
 from html.parser import HTMLParser
+from typing import Any
 
 from usms.parsers.meter_info_parser import MeterInfoParser
 
@@ -8,7 +9,9 @@ from usms.parsers.meter_info_parser import MeterInfoParser
 class AccountInfoParser(HTMLParser):
     """Account Information Parser Module."""
 
-    data: dict[str, str]
+    # "name" holds a string while "meters" accumulates parsed meter dicts, so the
+    # values are deliberately heterogeneous.
+    data: dict[str, Any]
 
     def __init__(self):
         """Initialize instance of AccountInfoParser."""
@@ -75,7 +78,7 @@ class AccountInfoParser(HTMLParser):
             self._meter_td_buffer += data.strip()
 
     @classmethod
-    def parse(cls, html_response: bytes | str) -> dict[str, str]:
+    def parse(cls, html_response: bytes | str) -> dict[str, Any]:
         """Parse the provided HTML response and extracts account info."""
         parser = cls()
         parser.feed(

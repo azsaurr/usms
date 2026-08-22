@@ -6,7 +6,7 @@ fetch billing details, and more from the USMS platform.
 """
 
 from usms.config.constants import BRUNEI_TZ, TARIFFS, UNITS
-from usms.core.client import USMSClient
+from usms.core.client import AsyncUSMSClient, BaseUSMSClient, USMSClient
 from usms.exceptions.errors import (
     USMSConsumptionHistoryNotFoundError,
     USMSFutureDateError,
@@ -34,8 +34,10 @@ __all__ = [
     "TARIFFS",
     "UNITS",
     "AsyncUSMSAccount",
+    "AsyncUSMSClient",
     "AsyncUSMSMeter",
     "BaseUSMSAccount",
+    "BaseUSMSClient",
     "BaseUSMSMeter",
     "USMSAccount",
     "USMSClient",
