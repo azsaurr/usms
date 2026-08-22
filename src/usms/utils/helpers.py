@@ -23,7 +23,7 @@ def sanitize_date(date: datetime) -> datetime:
     """Check given date and attempt to sanitize it, unless its in the future."""
     # Make sure given date has timezone info
     if not date.tzinfo:
-        logger.debug(f"Given date has no timezone, assuming {BRUNEI_TZ}")
+        logger.debug("Given date has no timezone, assuming %s", BRUNEI_TZ)
         date = date.astimezone()
     date = date.astimezone(BRUNEI_TZ)
 

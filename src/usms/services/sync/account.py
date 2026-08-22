@@ -21,19 +21,19 @@ class USMSAccount(BaseUSMSAccount):
 
     def initialize(self):
         """Initialize session object, fetch account info and set class attributes."""
-        logger.debug(f"[{self.reg_no}] Initializing account {self.reg_no}")
+        logger.debug("[%s] Initializing account %s", self.reg_no, self.reg_no)
 
         data = self.fetch_info()
         self.update_from_json(data)
 
         self._initialized = True
-        logger.debug(f"[{self.reg_no}] Initialized account")
+        logger.debug("[%s] Initialized account", self.reg_no)
 
     @classmethod
     def create(
         cls,
         session: USMSClient,
-        storage_manager: "BaseUSMSStorage" = None,
+        storage_manager: "BaseUSMSStorage | None" = None,
     ) -> "USMSAccount":
         """Initialize and return instance of this class as an object."""
         self = cls(
@@ -50,13 +50,13 @@ class USMSAccount(BaseUSMSAccount):
         Fetch minimal account and meters information, parse data,
         initialize class attributes and return as json.
         """
-        logger.debug(f"[{self.reg_no}] Fetching account details")
+        logger.debug("[%s] Fetching account details", self.reg_no)
 
         response = self.session.get("/Home")
         response_content = response.read()
         data = AccountInfoParser.parse(response_content)
 
-        logger.debug(f"[{self.reg_no}] Fetched account details")
+        logger.debug("[%s] Fetched account details", self.reg_no)
         return data
 
     def update_from_json(self, data: dict[str, str]) -> None:
@@ -72,30 +72,30 @@ class USMSAccount(BaseUSMSAccount):
     @requires_init
     def log_out(self) -> bool:
         """Log the user out of the USMS session by clearing session cookies."""
-        logger.debug(f"[{self.reg_no}] Logging out {self.reg_no}...")
+        logger.debug("[%s] Logging out %s...", self.reg_no, self.reg_no)
 
         self.session.get("/ResLogin")
         self.session.cookies = {}
 
         if not self.is_authenticated():
-            logger.debug(f"[{self.reg_no}] Log out successful")
+            logger.debug("[%s] Log out successful", self.reg_no)
             return True
 
-        logger.error(f"[{self.reg_no}] Log out fail")
+        logger.error("[%s] Log out fail", self.reg_no)
         return False
 
     @requires_init
     def log_in(self) -> bool:
         """Log in the user."""
-        logger.debug(f"[{self.reg_no}] Logging in {self.reg_no}...")
+        logger.debug("[%s] Logging in %s...", self.reg_no, self.reg_no)
 
         self.session.get("/AccountInfo")
 
         if self.is_authenticated():
-            logger.debug(f"[{self.reg_no}] Log in successful")
+            logger.debug("[%s] Log in successful", self.reg_no)
             return True
 
-        logger.error(f"[{self.reg_no}] Log in fail")
+        logger.error("[%s] Log in fail", self.reg_no)
         return False
 
     @requires_init
@@ -110,20 +110,20 @@ class USMSAccount(BaseUSMSAccount):
         is_authenticated = not self.auth.is_expired(response)
 
         if is_authenticated:
-            logger.debug(f"[{self.reg_no}] Account is authenticated")
+            logger.debug("[%s] Account is authenticated", self.reg_no)
         else:
-            logger.debug(f"[{self.reg_no}] Account is NOT authenticated")
+            logger.debug("[%s] Account is NOT authenticated", self.reg_no)
         return is_authenticated
 
     @requires_init
     def refresh_data(self) -> bool:
         """Fetch new data and update the meter info."""
-        logger.debug(f"[{self.reg_no}] Checking for updates")
+        logger.debug("[%s] Checking for updates", self.reg_no)
 
         try:
             fresh_info = self.fetch_info()
         except Exception as error:  # noqa: BLE001
-            logger.error(f"[{self.reg_no}] Failed to fetch update with error: {error}")
+            logger.error("[%s] Failed to fetch update with error: %s", self.reg_no, error)
             return False
 
         self.last_refresh = datetime.now().astimezone()
@@ -131,11 +131,11 @@ class USMSAccount(BaseUSMSAccount):
         for meter in fresh_info.get("meters", []):
             last_update = parse_datetime(meter.get("last_update")).astimezone(BRUNEI_TZ)
             if last_update > self.get_latest_update():
-                logger.debug(f"[{self.reg_no}] New updates found")
+                logger.debug("[%s] New updates found", self.reg_no)
                 self.update_from_json(fresh_info)
                 return True
 
-        logger.debug(f"[{self.reg_no}] No new updates found")
+        logger.debug("[%s] No new updates found", self.reg_no)
         return False
 
     @requires_init
@@ -145,7 +145,7 @@ class USMSAccount(BaseUSMSAccount):
             if self.is_update_due():
                 return self.refresh_data()
         except Exception as error:  # noqa: BLE001
-            logger.error(f"[{self.reg_no}] Failed to fetch update with error: {error}")
+            logger.error("[%s] Failed to fetch update with error: %s", self.reg_no, error)
             return False
 
         # Update not dued, data not refreshed

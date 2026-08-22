@@ -158,7 +158,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             return
 
         if error_message:
-            logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
+            logger.error("[%s] Error fetching consumptions: %s", self.no, error_message)
 
     def _is_stored_data_usable(
         self,
@@ -203,7 +203,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             date,
             timedelta(days=3),
         ):
-            logger.debug(f"[{self.no}] Found consumptions for: {date.date()}")
+            logger.debug("[%s] Found consumptions for: %s", self.no, date.date())
             return day_consumption
 
         return new_consumptions(self.unit, "h")
@@ -224,7 +224,7 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             date,
             timedelta(days=34),
         ):
-            logger.debug(f"[{self.no}] Found consumptions for: {date.year}-{date.month}")
+            logger.debug("[%s] Found consumptions for: %s-%s", self.no, date.year, date.month)
             return month_consumption
 
         return new_consumptions(self.unit, "D")

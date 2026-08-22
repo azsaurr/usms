@@ -22,11 +22,11 @@ if TYPE_CHECKING:
 def initialize_usms_account(  # noqa: PLR0913
     username: str | None = None,
     password: str | None = None,
-    client: "HTTPXClientProtocol" = None,
-    usms_client: "USMSClient" = None,
+    client: "HTTPXClientProtocol | None" = None,
+    usms_client: "USMSClient | None" = None,
     storage_type: str | None = None,
     storage_path: str | None = None,
-    storage_manager: "BaseUSMSStorage" = None,
+    storage_manager: "BaseUSMSStorage | None" = None,
     async_mode: bool | None = None,  # noqa: FBT001  # kwargs-style factory; kw-only would break callers
 ) -> "BaseUSMSAccount":
     """

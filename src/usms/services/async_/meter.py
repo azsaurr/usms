@@ -24,7 +24,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
 
     async def initialize(self, data: dict[str, str]) -> None:
         """Fetch meter info and then set initial class attributes."""
-        logger.debug(f"[{self._account.reg_no}] Initializing meter")
+        logger.debug("[%s] Initializing meter", self._account.reg_no)
         self.update_from_json(data)
         super().initialize()
 
@@ -37,7 +37,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
                 consumptions
             )
 
-        logger.debug(f"[{self._account.reg_no}] Initialized meter")
+        logger.debug("[%s] Initialized meter", self._account.reg_no)
 
     @classmethod
     async def create(cls, account: "AsyncUSMSAccount", data: dict[str, str]) -> "AsyncUSMSMeter":
@@ -57,7 +57,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         date = sanitize_date(date)
 
         if not self.supports_hourly_consumptions:
-            logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
+            logger.debug("[%s] Skipping hourly fetch, unsupported for this meter", self.no)
             return new_consumptions(self.unit, "h")
 
         if not force_refresh:
@@ -65,7 +65,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             if day_consumption:
                 return day_consumption
 
-        logger.debug(f"[{self.no}] Fetching consumptions for: {date.date()}")
+        logger.debug("[%s] Fetching consumptions for: %s", self.no, date.date())
         # build payload and perform requests
         payload = self._build_hourly_consumptions_payload(date)
         await self.session.get(f"/Report/UsageHistory?p={self.id}")
@@ -79,7 +79,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
 
         hourly_consumptions = self._parse_hourly_consumptions_response(response_content, date)
         if not hourly_consumptions:
-            logger.warning(f"[{self.no}] No consumptions data for : {date.date()}")
+            logger.warning("[%s] No consumptions data for : %s", self.no, date.date())
             return hourly_consumptions
 
         last_checked = datetime.now().astimezone()
@@ -90,7 +90,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         self.hourly_consumptions = merge_consumptions(hourly_consumptions, self.hourly_consumptions)
         self.hourly_last_checked.update(dict.fromkeys(hourly_consumptions, last_checked))
 
-        logger.debug(f"[{self.no}] Fetched consumptions for: {date.date()}")
+        logger.debug("[%s] Fetched consumptions for: %s", self.no, date.date())
         return hourly_consumptions
 
     @requires_init
@@ -108,7 +108,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             if month_consumption:
                 return month_consumption
 
-        logger.debug(f"[{self.no}] Fetching consumptions for: {date.year}-{date.month}")
+        logger.debug("[%s] Fetching consumptions for: %s-%s", self.no, date.year, date.month)
         # build payload and perform requests
         payload = self._build_daily_consumptions_payload(date)
 
@@ -120,7 +120,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
 
         daily_consumptions = self._parse_daily_consumptions_response(response_content, date)
         if not daily_consumptions:
-            logger.warning(f"[{self.no}] No consumptions data for : {date.year}-{date.month}")
+            logger.warning("[%s] No consumptions data for : %s-%s", self.no, date.year, date.month)
             return daily_consumptions
 
         last_checked = datetime.now().astimezone()
@@ -128,7 +128,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         self.daily_consumptions = merge_consumptions(daily_consumptions, self.daily_consumptions)
         self.daily_last_checked.update(dict.fromkeys(daily_consumptions, last_checked))
 
-        logger.debug(f"[{self.no}] Fetched consumptions for: {date.year}-{date.month}")
+        logger.debug("[%s] Fetched consumptions for: %s-%s", self.no, date.year, date.month)
         return daily_consumptions
 
     @requires_init
@@ -160,7 +160,7 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         last_n_days_hourly_consumptions = new_consumptions(self.unit, "h")
 
         if not self.supports_hourly_consumptions:
-            logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
+            logger.debug("[%s] Skipping hourly fetch, unsupported for this meter", self.no)
             return last_n_days_hourly_consumptions
 
         upper_date = datetime.now().astimezone()
@@ -178,7 +178,12 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             if n > 3:  # noqa: PLR2004
                 progress = round((i + 1) / (n + 1) * 100, 1)
                 logger.info(
-                    f"[{self.no}] Getting last {n} days hourly consumptions progress: {(i + 1)} out of {(n + 1)}, {progress}%"
+                    "[%s] Getting last %s days hourly consumptions progress: %s out of %s, %s%%",
+                    self.no,
+                    n,
+                    i + 1,
+                    n + 1,
+                    progress,
                 )
 
         return last_n_days_hourly_consumptions
@@ -186,10 +191,10 @@ class AsyncUSMSMeter(BaseUSMSMeter):
     @requires_init
     async def get_all_hourly_consumptions(self) -> dict[datetime, float]:
         """Get the hourly unit consumptions for all days and months."""
-        logger.debug(f"[{self.no}] Getting all hourly consumptions")
+        logger.debug("[%s] Getting all hourly consumptions", self.no)
 
         if not self.supports_hourly_consumptions:
-            logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
+            logger.debug("[%s] Skipping hourly fetch, unsupported for this meter", self.no)
             return self.hourly_consumptions
 
         upper_date = datetime.now().astimezone()
@@ -200,7 +205,11 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             await self.fetch_hourly_consumptions(date)
             progress = round((i + 1) / range_date * 100, 1)
             logger.info(
-                f"[{self.no}] Getting all hourly consumptions progress: {(i + 1)} out of {range_date}, {progress}%"
+                "[%s] Getting all hourly consumptions progress: %s out of %s, %s%%",
+                self.no,
+                i + 1,
+                range_date,
+                progress,
             )
 
         return self.hourly_consumptions
@@ -224,7 +233,9 @@ class AsyncUSMSMeter(BaseUSMSMeter):
                     break
         else:
             date = min(self.hourly_consumptions)
-        logger.info(f"[{self.no}] Finding earliest consumption date, starting from: {date.date()}")
+        logger.info(
+            "[%s] Finding earliest consumption date, starting from: %s", self.no, date.date()
+        )
 
         # Exponential backoff to find a missing date
         step = 1
@@ -234,20 +245,20 @@ class AsyncUSMSMeter(BaseUSMSMeter):
             if hourly_consumptions:
                 step *= 2  # Exponentially increase step
                 date -= timedelta(days=step)
-                logger.info(f"[{self.no}] Stepping {step} days from {date}")
+                logger.info("[%s] Stepping %s days from %s", self.no, step, date)
             elif step == 1:
                 if not self.hourly_consumptions:
-                    logger.error(f"[{self.no}] Cannot determine earliest available date")
+                    logger.error("[%s] Cannot determine earliest available date", self.no)
                     return now
                 # Already at base step, this is the earliest available data
                 date += timedelta(days=step)
                 self.earliest_consumption_date = date
-                logger.info(f"[{self.no}] Found earliest consumption date: {date}")
+                logger.info("[%s] Found earliest consumption date: %s", self.no, date)
                 return date
             else:
                 # Went too far — reverse the last large step and reset step to 1
                 date += timedelta(days=step)
-                logger.debug(f"[{self.no}] Stepped too far, going back to: {date}")
+                logger.debug("[%s] Stepped too far, going back to: %s", self.no, date)
                 step /= 4  # Half the last step
 
     @requires_init
