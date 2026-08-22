@@ -4,7 +4,7 @@ from abc import ABC
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from usms.config.constants import REFRESH_INTERVAL, UPDATE_INTERVAL
+from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, UPDATE_INTERVAL
 from usms.core.client import USMSClient
 from usms.exceptions.errors import USMSMeterNumberError
 from usms.models.account import USMSAccount as USMSAccountModel
@@ -50,7 +50,7 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
     @requires_init
     def get_latest_update(self) -> datetime:
         """Return the latest time a meter was updated."""
-        latest_update = datetime.fromtimestamp(0).astimezone()
+        latest_update = datetime.fromtimestamp(0, tz=BRUNEI_TZ)
         for meter in self.meters:
             latest_update = max(latest_update, meter.last_update)
         return latest_update
