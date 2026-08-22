@@ -341,11 +341,9 @@ class USMSMeter(BaseUSMSMeter):
     ) -> None:
         """Insert the given consumptions into the database."""
         new_consumptions_map = consumptions_diff(self.hourly_consumptions, consumptions)
+        checked_at = int(last_checked.timestamp())
 
-        for timestamp, consumption in new_consumptions_map.items():
-            self.storage_manager.insert_or_replace(
-                meter_no=self.no,
-                timestamp=int(timestamp.timestamp()),
-                consumption=consumption,
-                last_checked=int(last_checked.timestamp()),
-            )
+        self.storage_manager.insert_or_replace_many(
+            (self.no, int(timestamp.timestamp()), consumption, checked_at)
+            for timestamp, consumption in new_consumptions_map.items()
+        )

@@ -1,6 +1,7 @@
 """SQLite Database Wrapper."""
 
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
 
 from usms.storage.base_storage import BaseUSMSStorage
@@ -47,6 +48,21 @@ class SQLiteUSMSStorage(BaseUSMSStorage):
                 ) VALUES (?, ?, ?, ?)
                 """,
                 (meter_no, timestamp, consumption, last_checked),
+            )
+
+    def insert_or_replace_many(
+        self,
+        records: Iterable[tuple[str, int, float, int]],
+    ) -> None:
+        """Insert or replace many consumption records in a single transaction."""
+        with self.conn:
+            self.conn.executemany(
+                """
+                INSERT OR REPLACE INTO consumption (
+                    meter_no, timestamp, consumption, last_checked
+                ) VALUES (?, ?, ?, ?)
+                """,
+                list(records),
             )
 
     def get_consumption(
