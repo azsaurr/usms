@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+from usms.config.constants import MAX_HISTORY_DAYS
 from usms.services.meter import BaseUSMSMeter
 from usms.utils.decorators import requires_init
 from usms.utils.helpers import (
@@ -264,46 +265,73 @@ class USMSMeter(BaseUSMSMeter):
         if self.earliest_consumption_date is not None:
             return self.earliest_consumption_date
 
-        # No hourly report exists to probe for water, so there is nothing to search.
+        # No hourly report exists to probe for water, so walk the daily series back
+        # instead. get_all_daily_consumptions() already stops at the first empty month
+        # and caches what it finds, so this resolves to the true earliest reading.
         if not self.supports_hourly_consumptions:
+            if not self.daily_consumptions:
+                self.get_all_daily_consumptions()
             return self._earliest_daily_consumption_date()
 
-        now = datetime.now().astimezone()
-        if not self.hourly_consumptions:
-            for i in range(7):
-                date = now - timedelta(days=i)
-                hourly_consumptions = self.fetch_hourly_consumptions(date)
-                if hourly_consumptions:
-                    break
-        else:
-            date = min(self.hourly_consumptions)
+        latest = self._recent_date_with_consumptions()
+        if latest is None:
+            logger.error("[%s] Cannot determine earliest available date", self.no)
+            return datetime.now().astimezone()
+
+        # Work on whole days: every fetch floors its date to midnight anyway, so a
+        # bracket that drifts off day boundaries would probe the same day forever.
+        latest = sanitize_date(latest)
+
         logger.info(
-            "[%s] Finding earliest consumption date, starting from: %s", self.no, date.date()
+            "[%s] Finding earliest consumption date, starting from: %s", self.no, latest.date()
         )
 
-        # Exponential backoff to find a missing date
-        step = 1
-        while True:
-            hourly_consumptions = self.fetch_hourly_consumptions(date)
-
-            if hourly_consumptions:
-                step *= 2  # Exponentially increase step
-                date -= timedelta(days=step)
-                logger.info("[%s] Stepping %s days from %s", self.no, step, date)
-            elif step == 1:
-                if not self.hourly_consumptions:
-                    logger.error("[%s] Cannot determine earliest available date", self.no)
-                    return now
-                # Already at base step, this is the earliest available data
-                date += timedelta(days=step)
-                self.earliest_consumption_date = date
-                logger.info("[%s] Found earliest consumption date: %s", self.no, date)
-                return date
+        # Gallop backwards from a known-good date until a day comes back empty, which
+        # brackets the boundary between `earliest_empty` and `latest_with_data`.
+        latest_with_data = latest
+        earliest_empty = None
+        offset = 1
+        while offset <= MAX_HISTORY_DAYS:
+            probe = latest - timedelta(days=offset)
+            if self.fetch_hourly_consumptions(probe):
+                latest_with_data = probe
+                offset *= 2
             else:
-                # Went too far — reverse the last large step and reset step to 1
-                date += timedelta(days=step)
-                logger.debug("[%s] Stepped too far, going back to: %s", self.no, date)
-                step /= 4  # Half the last step
+                earliest_empty = probe
+                break
+
+        if earliest_empty is None:
+            # Never found an empty day within the backstop; treat the oldest probe as
+            # the earliest rather than searching indefinitely.
+            self.earliest_consumption_date = latest_with_data
+            return latest_with_data
+
+        # Binary search the bracket for the first day that still has data.
+        while (latest_with_data - earliest_empty).days > 1:
+            midpoint = earliest_empty + timedelta(
+                days=(latest_with_data - earliest_empty).days // 2
+            )
+            if self.fetch_hourly_consumptions(midpoint):
+                latest_with_data = midpoint
+            else:
+                earliest_empty = midpoint
+
+        self.earliest_consumption_date = latest_with_data
+        logger.info("[%s] Found earliest consumption date: %s", self.no, latest_with_data.date())
+        return latest_with_data
+
+    @requires_init
+    def _recent_date_with_consumptions(self) -> datetime | None:
+        """Return a recent date known to hold hourly data, or None if there is none."""
+        if self.hourly_consumptions:
+            return min(self.hourly_consumptions)
+
+        now = datetime.now().astimezone()
+        for days_ago in range(7):
+            date = now - timedelta(days=days_ago)
+            if self.fetch_hourly_consumptions(date):
+                return date
+        return None
 
     @requires_init
     def store_consumptions(

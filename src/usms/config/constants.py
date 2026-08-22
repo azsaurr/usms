@@ -44,3 +44,8 @@ REFRESH_INTERVAL = timedelta(seconds=60 * 15)
 # Per-meter Top Up page. Payment itself redirects to the bank's secure site, so this
 # is only ever handed to the user, never submitted programmatically.
 TOPUP_URL = "https://www.usms.com.bn/SmartMeter/Payment/WebForm2"
+
+# Upper bound on how far back the earliest-date search will probe. USMS keeps hourly
+# data until the meter's commissioning date rather than for a rolling window; this is
+# only a backstop so the search cannot run away.
+MAX_HISTORY_DAYS = 1024
