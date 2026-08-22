@@ -6,8 +6,9 @@ customized especially for authenticating
 with USMS accounts.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlparse
 
 from usms.exceptions.errors import USMSLoginError
 from usms.parsers.asp_state_parser import ASPStateParser
@@ -16,6 +17,21 @@ from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
     from usms.core.protocols import HTTPXResponseProtocol
+
+
+def _extract_sig(history: "Iterable") -> str | None:
+    """
+    Return the `Sig` token USMS embeds in a redirect URL, or None if absent.
+
+    Parsed as a query parameter rather than split out of the string: `Sig` is
+    currently the last parameter, but splitting on the final `&` would silently
+    return the wrong value the moment USMS appends anything after it.
+    """
+    for past_response in history:
+        query = parse_qs(urlparse(str(past_response.url)).query)
+        if "Sig" in query:
+            return query["Sig"][0]
+    return None
 
 
 class USMSClientAuthMixin:
@@ -108,12 +124,7 @@ class USMSClientAuthMixin:
         self.client.headers["cookie"] = f"ASP.NET_SessionId={session_id}"
 
         # Retrieve secondary auth mechanism Sig, embedded in a redirect URL
-        sig = None
-        for past_response in response.history:
-            past_response_url = str(past_response.url)
-            if "Sig=" in past_response_url:
-                sig = past_response_url.rsplit("Sig=", maxsplit=1)[-1].rsplit("&", maxsplit=1)[-1]
-                break
+        sig = _extract_sig(response.history)
         if sig is None:
             raise USMSLoginError
 
@@ -151,12 +162,7 @@ class USMSClientAuthMixin:
         self.client.headers["cookie"] = f"ASP.NET_SessionId={session_id}"
 
         # Retrieve secondary auth mechanism Sig, embedded in a redirect URL
-        sig = None
-        for past_response in response.history:
-            past_response_url = str(past_response.url)
-            if "Sig=" in past_response_url:
-                sig = past_response_url.rsplit("Sig=", maxsplit=1)[-1].rsplit("&", maxsplit=1)[-1]
-                break
+        sig = _extract_sig(response.history)
         if sig is None:
             raise USMSLoginError
 
