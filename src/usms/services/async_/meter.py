@@ -227,6 +227,42 @@ class AsyncUSMSMeter(BaseUSMSMeter):
         return self.hourly_consumptions
 
     @requires_init
+    async def get_all_daily_consumptions(self, max_months: int = 24) -> dict[datetime, float]:
+        """
+        Return daily consumptions going as far back as USMS still holds them.
+
+        The counterpart to get_all_hourly_consumptions() for meters with no hourly
+        report (water): their history is only available at daily resolution. Walks
+        backwards a month at a time and stops at the first month with no data, or
+        after `max_months` as a backstop.
+        """
+        logger.debug("[%s] Getting all daily consumptions", self.no)
+
+        all_daily_consumptions = new_consumptions(self.unit, "D")
+        date = datetime.now().astimezone()
+
+        for month in range(max_months):
+            month_consumptions = await self.fetch_daily_consumptions(date)
+            if not month_consumptions:
+                logger.debug("[%s] No data for %s-%s, stopping", self.no, date.year, date.month)
+                break
+
+            all_daily_consumptions = merge_consumptions(
+                month_consumptions,
+                all_daily_consumptions,
+            )
+            logger.info(
+                "[%s] Getting all daily consumptions, %s months back, %s readings so far",
+                self.no,
+                month + 1,
+                len(all_daily_consumptions),
+            )
+            # Step to the last day of the preceding month.
+            date = date.replace(day=1) - timedelta(days=1)
+
+        return all_daily_consumptions
+
+    @requires_init
     async def find_earliest_consumption_date(self) -> datetime:
         """Determine the earliest date for which hourly consumption data is available."""
         if self.earliest_consumption_date is not None:
