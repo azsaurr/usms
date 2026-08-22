@@ -128,6 +128,18 @@ class USMSMeter(BaseUSMSMeter):
         return daily_consumptions
 
     @requires_init
+    def fetch_payment_info(self) -> dict[str, str]:
+        """
+        Fetch this meter's debt and customer details from its Top Up page.
+
+        These are not exposed anywhere else in USMS, and are read-only: the page's
+        payment form redirects to the bank, so `topup_url` is the way to act on it.
+        """
+        logger.debug("[%s] Fetching payment info", self.no)
+        response = self.session.get(self._payment_info_path)
+        return self._parse_payment_info_response(response.read())
+
+    @requires_init
     def get_previous_n_month_consumptions(self, n: int = 0) -> dict[datetime, float]:
         """
         Return the consumptions for previous n month.

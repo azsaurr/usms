@@ -9,6 +9,7 @@ from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, TARIFFS
 from usms.models.meter import USMSMeter as USMSMeterModel
 from usms.parsers.error_message_parser import ErrorMessageParser
 from usms.parsers.meter_consumptions_parser import MeterConsumptionsParser
+from usms.parsers.meter_payment_info_parser import MeterPaymentInfoParser
 from usms.utils.decorators import requires_init
 from usms.utils.helpers import new_consumptions, sanitize_date
 from usms.utils.logging_config import logger
@@ -147,6 +148,19 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             datetime(date.year, date.month, int(day) + 1, tzinfo=BRUNEI_TZ): float(consumption)
             for day, consumption in MeterConsumptionsParser.parse(response_content).items()
         }
+
+    @property
+    def _payment_info_path(self) -> str:
+        """Return the path of this meter's Top Up page, which carries the debt details."""
+        return f"/Payment/WebForm2?p={self.id}&s=h"
+
+    def _parse_payment_info_response(self, response_content: bytes) -> dict[str, str]:
+        """Parse a Top Up page response and apply it to this meter."""
+        data = MeterPaymentInfoParser.parse(response_content)
+        self.update_from_payment_json(data)
+
+        logger.debug("[%s] Fetched payment info, debt owing: %s", self.no, self.total_debt_owing)
+        return data
 
     def _log_consumptions_error(self, response_content: bytes) -> None:
         """Log any error carried by a UsageHistory response."""

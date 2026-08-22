@@ -40,3 +40,7 @@ TARIFFS = {
 
 UPDATE_INTERVAL = timedelta(seconds=60 * 60)
 REFRESH_INTERVAL = timedelta(seconds=60 * 15)
+
+# Per-meter Top Up page. Payment itself redirects to the bank's secure site, so this
+# is only ever handed to the user, never submitted programmatically.
+TOPUP_URL = "https://www.usms.com.bn/SmartMeter/Payment/WebForm2"

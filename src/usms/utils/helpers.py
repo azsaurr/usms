@@ -106,6 +106,22 @@ def consumptions_from_storage(
     return dict(sorted(consumptions_map.items())), last_checked_map
 
 
+def parse_currency(value: str | None) -> float:
+    """
+    Parse a USMS currency string such as "$1,234.56" into a float.
+
+    USMS renders "not applicable" as a bare dash or an empty cell, both of which mean
+    zero in every field this is used for, so unparseable input yields 0.0.
+    """
+    if not value:
+        return 0.0
+
+    try:
+        return float(value.replace("$", "").replace(",", "").strip())
+    except ValueError:
+        return 0.0
+
+
 def parse_datetime(datetime_str: str) -> datetime:
     """
     Convert a given date/time string from USMS into a timezone-aware datetime object.
