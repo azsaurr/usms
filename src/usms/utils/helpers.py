@@ -3,8 +3,6 @@
 from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
-
 from usms.config.constants import BRUNEI_TZ, UNITS
 from usms.exceptions.errors import (
     USMSFutureDateError,
@@ -36,39 +34,41 @@ def sanitize_date(date: datetime) -> datetime:
     return datetime(year=date.year, month=date.month, day=date.day, tzinfo=BRUNEI_TZ)
 
 
-def new_consumptions_dataframe(unit: str, freq: str) -> pd.DataFrame:
-    """Return an empty dataframe with proper datetime index and column name."""
-    # check for valid parameters
+def new_consumptions(unit: str, freq: str) -> dict[datetime, float]:
+    """
+    Validate the given unit/frequency pair and return an empty consumptions mapping.
+
+    Consumptions are held as {timestamp: consumption}, ordered chronologically. Unlike
+    the dataframe this replaces, gaps are simply absent rather than materialised as
+    NaN rows, so summing and iterating skip them naturally.
+    """
     if unit not in UNITS.values():
         raise USMSInvalidParameterError(unit, UNITS.values())
 
     if freq not in ("h", "D"):
         raise USMSInvalidParameterError(freq, ("h", "D"))
 
-    new_dataframe = pd.DataFrame(
-        dtype=float,
-        columns=[unit, "last_checked"],
-        index=pd.DatetimeIndex(
-            [],
-            tz=BRUNEI_TZ,
-            freq=freq,
-        ),
-    )
-    new_dataframe["last_checked"] = pd.to_datetime(new_dataframe["last_checked"]).dt.tz_localize(
-        datetime.now().astimezone().tzinfo
-    )
-    return new_dataframe
+    return {}
 
 
-def dataframe_diff(
-    old_dataframe: pd.DataFrame,
-    new_dataframe: pd.DataFrame,
-) -> pd.DataFrame:
-    """Return the diff (updated or new rows) between two dataframes."""
-    old_dataframe = old_dataframe.reindex(new_dataframe.index)
-    diff_mask = old_dataframe.ne(new_dataframe)
-    new_dataframe = new_dataframe[diff_mask.any(axis=1)]
-    return new_dataframe
+def merge_consumptions(
+    new_consumptions_map: dict[datetime, float],
+    old_consumptions_map: dict[datetime, float],
+) -> dict[datetime, float]:
+    """Merge two consumptions mappings chronologically, preferring the newer values."""
+    return dict(sorted({**old_consumptions_map, **new_consumptions_map}.items()))
+
+
+def consumptions_diff(
+    old_consumptions_map: dict[datetime, float],
+    new_consumptions_map: dict[datetime, float],
+) -> dict[datetime, float]:
+    """Return the entries of the new mapping that are absent from or differ from the old."""
+    return {
+        timestamp: consumption
+        for timestamp, consumption in new_consumptions_map.items()
+        if old_consumptions_map.get(timestamp) != consumption
+    }
 
 
 def get_storage_manager(storage_type: str, storage_path: Path | None = None) -> BaseUSMSStorage:
@@ -86,36 +86,24 @@ def get_storage_manager(storage_type: str, storage_path: Path | None = None) -> 
     raise USMSUnsupportedStorageError(storage_type)
 
 
-def consumptions_storage_to_dataframe(
+def consumptions_from_storage(
     consumptions: list[tuple[str, float, str]],
-) -> pd.DataFrame:
-    """Convert retrieved consumptions from persistent storage to dataframe."""
-    hourly_consumptions = pd.DataFrame(
-        consumptions,
-        columns=["timestamp", "consumption", "last_checked"],
-    )
+) -> tuple[dict[datetime, float], dict[datetime, datetime]]:
+    """
+    Convert consumptions retrieved from persistent storage into in-memory mappings.
 
-    # last_checked timestamp
-    hourly_consumptions["last_checked"] = pd.to_datetime(
-        hourly_consumptions["last_checked"],
-        unit="s",
-    )
-    hourly_consumptions["last_checked"] = hourly_consumptions["last_checked"].dt.tz_localize("UTC")
-    hourly_consumptions["last_checked"] = hourly_consumptions["last_checked"].dt.tz_convert(
-        "Asia/Brunei"
-    )
+    Storage holds epoch seconds; both returned mappings are keyed by Brunei-local
+    timestamps. Returns the consumptions and their last_checked times separately.
+    """
+    consumptions_map: dict[datetime, float] = {}
+    last_checked_map: dict[datetime, datetime] = {}
 
-    # timestamp as index
-    hourly_consumptions["timestamp"] = pd.to_datetime(
-        hourly_consumptions["timestamp"],
-        unit="s",
-    )
-    hourly_consumptions["timestamp"] = hourly_consumptions["timestamp"].dt.tz_localize("UTC")
-    hourly_consumptions["timestamp"] = hourly_consumptions["timestamp"].dt.tz_convert("Asia/Brunei")
-    hourly_consumptions.set_index("timestamp", inplace=True)
-    hourly_consumptions.index.name = None
+    for timestamp, consumption, last_checked in consumptions:
+        moment = datetime.fromtimestamp(int(timestamp), tz=BRUNEI_TZ)
+        consumptions_map[moment] = float(consumption)
+        last_checked_map[moment] = datetime.fromtimestamp(int(last_checked), tz=BRUNEI_TZ)
 
-    return hourly_consumptions
+    return dict(sorted(consumptions_map.items())), last_checked_map
 
 
 def parse_datetime(datetime_str: str) -> datetime:

@@ -3,16 +3,13 @@
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-import pandas as pd
-
-from usms.parsers.error_message_parser import ErrorMessageParser
-from usms.parsers.meter_consumptions_parser import MeterConsumptionsParser
 from usms.services.meter import BaseUSMSMeter
 from usms.utils.decorators import requires_init
 from usms.utils.helpers import (
-    consumptions_storage_to_dataframe,
-    dataframe_diff,
-    new_consumptions_dataframe,
+    consumptions_diff,
+    consumptions_from_storage,
+    merge_consumptions,
+    new_consumptions,
     sanitize_date,
 )
 from usms.utils.logging_config import logger
@@ -32,11 +29,8 @@ class USMSMeter(BaseUSMSMeter):
 
         if self.storage_manager is not None:
             consumptions = self.storage_manager.get_all_consumptions(self.no)
-            self.hourly_consumptions = consumptions_storage_to_dataframe(consumptions)
-
-            self.hourly_consumptions.rename(
-                columns={"consumption": self.unit},
-                inplace=True,
+            self.hourly_consumptions, self.hourly_last_checked = consumptions_from_storage(
+                consumptions
             )
 
         logger.debug(f"[{self._account.reg_no}] Initialized meter")
@@ -54,17 +48,17 @@ class USMSMeter(BaseUSMSMeter):
         date: datetime,
         *,
         force_refresh: bool = False,
-    ) -> pd.Series:
-        """Fetch hourly consumptions for a given date and return as pd.Series."""
+    ) -> dict[datetime, float]:
+        """Fetch hourly consumptions for a given date."""
         date = sanitize_date(date)
 
         if not self.supports_hourly_consumptions:
             logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
-            return new_consumptions_dataframe(self.unit, "h")[self.unit]
+            return new_consumptions(self.unit, "h")
 
         if not force_refresh:
             day_consumption = self.get_hourly_consumptions(date)
-            if not day_consumption.empty:
+            if day_consumption:
                 return day_consumption
 
         logger.debug(f"[{self.no}] Fetching consumptions for: {date.date()}")
@@ -79,41 +73,21 @@ class USMSMeter(BaseUSMSMeter):
         )
         response_content = response.read()
 
-        error_message = ErrorMessageParser.parse(response_content).get("error_message")
-        if error_message == "consumption history not found.":
-            # this error message is somehow not always true
-            # ignore it for now, and check for the table properly instead
-            pass
-        elif error_message is not None and error_message != "":
-            logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
-
-        hourly_consumptions = MeterConsumptionsParser.parse(response_content)
-
-        # convert dict to pd.DataFrame
-        hourly_consumptions = pd.DataFrame.from_dict(
-            hourly_consumptions,
-            dtype=float,
-            orient="index",
-            columns=[self.unit],
-        )
-
-        if hourly_consumptions.empty:
+        hourly_consumptions = self._parse_hourly_consumptions_response(response_content, date)
+        if not hourly_consumptions:
             logger.warning(f"[{self.no}] No consumptions data for : {date.date()}")
-            return hourly_consumptions[self.unit]
+            return hourly_consumptions
 
-        hourly_consumptions.index = pd.to_datetime(
-            [date + timedelta(hours=int(hour) - 1) for hour in hourly_consumptions.index]
-        )
-        hourly_consumptions = hourly_consumptions.asfreq("h")
-        hourly_consumptions["last_checked"] = datetime.now().astimezone()
+        last_checked = datetime.now().astimezone()
 
         if self.storage_manager is not None:
-            self.store_consumptions(hourly_consumptions)
+            self.store_consumptions(hourly_consumptions, last_checked)
 
-        self.hourly_consumptions = hourly_consumptions.combine_first(self.hourly_consumptions)
+        self.hourly_consumptions = merge_consumptions(hourly_consumptions, self.hourly_consumptions)
+        self.hourly_last_checked.update(dict.fromkeys(hourly_consumptions, last_checked))
 
         logger.debug(f"[{self.no}] Fetched consumptions for: {date.date()}")
-        return hourly_consumptions[self.unit]
+        return hourly_consumptions
 
     @requires_init
     def fetch_daily_consumptions(
@@ -121,13 +95,13 @@ class USMSMeter(BaseUSMSMeter):
         date: datetime,
         *,
         force_refresh: bool = False,
-    ) -> pd.Series:
-        """Fetch daily consumptions for a given date and return as pd.Series."""
+    ) -> dict[datetime, float]:
+        """Fetch daily consumptions for a given date."""
         date = sanitize_date(date)
 
         if not force_refresh:
             month_consumption = self.get_daily_consumptions(date)
-            if not month_consumption.empty:
+            if month_consumption:
                 return month_consumption
 
         logger.debug(f"[{self.no}] Fetching consumptions for: {date.year}-{date.month}")
@@ -140,36 +114,21 @@ class USMSMeter(BaseUSMSMeter):
         response = self.session.post(f"/Report/UsageHistory?p={self.id}", data=payload)
         response_content = response.read()
 
-        error_message = ErrorMessageParser.parse(response_content).get("error_message")
-        if error_message:
-            daily_consumptions = new_consumptions_dataframe(self.unit, "D")
-        else:
-            daily_consumptions = MeterConsumptionsParser.parse(response_content)
-
-        # convert dict to pd.DataFrame
-        daily_consumptions = pd.DataFrame.from_dict(
-            daily_consumptions,
-            dtype=float,
-            orient="index",
-            columns=[self.unit],
-        )
-        daily_consumptions.index = pd.to_datetime(
-            [f"{date.year}-{date.month:02d}-{int(day) + 1}" for day in daily_consumptions.index]
-        )
-        daily_consumptions = daily_consumptions.asfreq("D")
-        daily_consumptions["last_checked"] = datetime.now().astimezone()
-
-        if daily_consumptions.empty:
+        daily_consumptions = self._parse_daily_consumptions_response(response_content, date)
+        if not daily_consumptions:
             logger.warning(f"[{self.no}] No consumptions data for : {date.year}-{date.month}")
-            return daily_consumptions[self.unit]
+            return daily_consumptions
 
-        self.daily_consumptions = daily_consumptions.combine_first(self.daily_consumptions)
+        last_checked = datetime.now().astimezone()
+
+        self.daily_consumptions = merge_consumptions(daily_consumptions, self.daily_consumptions)
+        self.daily_last_checked.update(dict.fromkeys(daily_consumptions, last_checked))
 
         logger.debug(f"[{self.no}] Fetched consumptions for: {date.year}-{date.month}")
-        return daily_consumptions[self.unit]
+        return daily_consumptions
 
     @requires_init
-    def get_previous_n_month_consumptions(self, n: int = 0) -> pd.Series:
+    def get_previous_n_month_consumptions(self, n: int = 0) -> dict[datetime, float]:
         """
         Return the consumptions for previous n month.
 
@@ -185,7 +144,7 @@ class USMSMeter(BaseUSMSMeter):
         return self.fetch_daily_consumptions(date)
 
     @requires_init
-    def get_last_n_days_hourly_consumptions(self, n: int = 0) -> pd.Series:
+    def get_last_n_days_hourly_consumptions(self, n: int = 0) -> dict[datetime, float]:
         """
         Return the hourly unit consumptions for the last n days accumulatively.
 
@@ -194,10 +153,7 @@ class USMSMeter(BaseUSMSMeter):
         n=1 : data from yesterday until today
         n=2 : data from 2 days ago until today
         """
-        last_n_days_hourly_consumptions = new_consumptions_dataframe(
-            self.unit,
-            "h",
-        )[self.unit]
+        last_n_days_hourly_consumptions = new_consumptions(self.unit, "h")
 
         if not self.supports_hourly_consumptions:
             logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
@@ -209,9 +165,10 @@ class USMSMeter(BaseUSMSMeter):
             date = lower_date + timedelta(days=i)
             hourly_consumptions = self.fetch_hourly_consumptions(date)
 
-            if not hourly_consumptions.empty:
-                last_n_days_hourly_consumptions = hourly_consumptions.combine_first(
-                    last_n_days_hourly_consumptions
+            if hourly_consumptions:
+                last_n_days_hourly_consumptions = merge_consumptions(
+                    hourly_consumptions,
+                    last_n_days_hourly_consumptions,
                 )
 
             if n > 3:  # noqa: PLR2004
@@ -223,13 +180,13 @@ class USMSMeter(BaseUSMSMeter):
         return last_n_days_hourly_consumptions
 
     @requires_init
-    def get_all_hourly_consumptions(self) -> pd.Series:
+    def get_all_hourly_consumptions(self) -> dict[datetime, float]:
         """Get the hourly unit consumptions for all days and months."""
         logger.debug(f"[{self.no}] Getting all hourly consumptions")
 
         if not self.supports_hourly_consumptions:
             logger.debug(f"[{self.no}] Skipping hourly fetch, unsupported for this meter")
-            return self.hourly_consumptions[self.unit]
+            return self.hourly_consumptions
 
         upper_date = datetime.now().astimezone()
         lower_date = self.find_earliest_consumption_date()
@@ -242,7 +199,7 @@ class USMSMeter(BaseUSMSMeter):
                 f"[{self.no}] Getting all hourly consumptions progress: {(i + 1)} out of {range_date}, {progress}%"
             )
 
-        return self.hourly_consumptions[self.unit]
+        return self.hourly_consumptions
 
     @requires_init
     def find_earliest_consumption_date(self) -> datetime:
@@ -255,14 +212,14 @@ class USMSMeter(BaseUSMSMeter):
             return self._earliest_daily_consumption_date()
 
         now = datetime.now().astimezone()
-        if self.hourly_consumptions.empty:
+        if not self.hourly_consumptions:
             for i in range(7):
                 date = now - timedelta(days=i)
                 hourly_consumptions = self.fetch_hourly_consumptions(date)
-                if not hourly_consumptions.empty:
+                if hourly_consumptions:
                     break
         else:
-            date = self.hourly_consumptions.index.min()
+            date = min(self.hourly_consumptions)
         logger.info(f"[{self.no}] Finding earliest consumption date, starting from: {date.date()}")
 
         # Exponential backoff to find a missing date
@@ -270,12 +227,12 @@ class USMSMeter(BaseUSMSMeter):
         while True:
             hourly_consumptions = self.fetch_hourly_consumptions(date)
 
-            if not hourly_consumptions.empty:
+            if hourly_consumptions:
                 step *= 2  # Exponentially increase step
                 date -= timedelta(days=step)
                 logger.info(f"[{self.no}] Stepping {step} days from {date}")
             elif step == 1:
-                if self.hourly_consumptions.empty:
+                if not self.hourly_consumptions:
                     logger.error(f"[{self.no}] Cannot determine earliest available date")
                     return now
                 # Already at base step, this is the earliest available data
@@ -290,14 +247,18 @@ class USMSMeter(BaseUSMSMeter):
                 step /= 4  # Half the last step
 
     @requires_init
-    def store_consumptions(self, consumptions: pd.DataFrame) -> None:
-        """Insert consumptions in the given dataframe to the database."""
-        new_statistics_df = dataframe_diff(self.hourly_consumptions, consumptions)
+    def store_consumptions(
+        self,
+        consumptions: dict[datetime, float],
+        last_checked: datetime,
+    ) -> None:
+        """Insert the given consumptions into the database."""
+        new_consumptions_map = consumptions_diff(self.hourly_consumptions, consumptions)
 
-        for row in new_statistics_df.itertuples(index=True, name="Row"):
+        for timestamp, consumption in new_consumptions_map.items():
             self.storage_manager.insert_or_replace(
                 meter_no=self.no,
-                timestamp=int(row.Index.timestamp()),
-                consumption=getattr(row, self.unit),
-                last_checked=int(row.last_checked.timestamp()),
+                timestamp=int(timestamp.timestamp()),
+                consumption=consumption,
+                last_checked=int(last_checked.timestamp()),
             )

@@ -7,13 +7,13 @@ from zoneinfo import ZoneInfo
 
 from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, TARIFFS
 from usms.models.meter import USMSMeter as USMSMeterModel
+from usms.parsers.error_message_parser import ErrorMessageParser
+from usms.parsers.meter_consumptions_parser import MeterConsumptionsParser
 from usms.utils.decorators import requires_init
-from usms.utils.helpers import new_consumptions_dataframe, sanitize_date
+from usms.utils.helpers import new_consumptions, sanitize_date
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from usms.core.client import USMSClient
     from usms.services.account import BaseUSMSAccount
 
@@ -25,8 +25,13 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
     session: "USMSClient"
 
     earliest_consumption_date: datetime
-    hourly_consumptions: "pd.DataFrame"
-    daily_consumptions: "pd.DataFrame"
+
+    # Consumptions are {timestamp: consumption}, with the time each entry was last
+    # fetched held alongside so the refresh check does not need a parallel column.
+    hourly_consumptions: dict[datetime, float]
+    daily_consumptions: dict[datetime, float]
+    hourly_last_checked: dict[datetime, datetime]
+    daily_last_checked: dict[datetime, datetime]
 
     def __init__(self, account: "BaseUSMSAccount") -> None:
         """Set initial class variables."""
@@ -42,8 +47,10 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         self._initialized = True
 
-        self.hourly_consumptions = new_consumptions_dataframe(self.unit, "h")
-        self.daily_consumptions = new_consumptions_dataframe(self.unit, "D")
+        self.hourly_consumptions = new_consumptions(self.unit, "h")
+        self.daily_consumptions = new_consumptions(self.unit, "D")
+        self.hourly_last_checked = {}
+        self.daily_last_checked = {}
 
     def _build_hourly_consumptions_payload(self, date: datetime) -> dict[str, str]:
         """Build and return the payload for the hourly consumptions page from a given date."""
@@ -105,82 +112,147 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
 
         return payload
 
+    def _parse_hourly_consumptions_response(
+        self,
+        response_content: bytes,
+        date: datetime,
+    ) -> dict[datetime, float]:
+        """
+        Parse an hourly UsageHistory response into a consumptions mapping.
+
+        Shared verbatim by the sync and async services, which differ only in how the
+        response body is read. Hours are reported 1-24, keyed to the start of the hour.
+        """
+        self._log_consumptions_error(response_content)
+
+        return {
+            date + timedelta(hours=int(hour) - 1): float(consumption)
+            for hour, consumption in MeterConsumptionsParser.parse(response_content).items()
+        }
+
+    def _parse_daily_consumptions_response(
+        self,
+        response_content: bytes,
+        date: datetime,
+    ) -> dict[datetime, float]:
+        """
+        Parse a daily UsageHistory response into a consumptions mapping.
+
+        Shared verbatim by the sync and async services. Days are reported zero-based
+        within the month, and are keyed to midnight Brunei time.
+        """
+        self._log_consumptions_error(response_content)
+
+        return {
+            datetime(date.year, date.month, int(day) + 1, tzinfo=BRUNEI_TZ): float(consumption)
+            for day, consumption in MeterConsumptionsParser.parse(response_content).items()
+        }
+
+    def _log_consumptions_error(self, response_content: bytes) -> None:
+        """Log any error carried by a UsageHistory response."""
+        error_message = ErrorMessageParser.parse(response_content).get("error_message")
+
+        if error_message == "consumption history not found.":
+            # this error message is somehow not always true
+            # ignore it for now, and check for the table properly instead
+            return
+
+        if error_message:
+            logger.error(f"[{self.no}] Error fetching consumptions: {error_message}")
+
+    def _is_stored_data_usable(
+        self,
+        stored_consumptions: dict[datetime, float],
+        last_checked_map: dict[datetime, datetime],
+        date: datetime,
+        settled_after: timedelta,
+    ) -> bool:
+        """
+        Return True if stored consumptions for a date can be used without refetching.
+
+        Stored data is reused either when it was checked recently, or when the date is
+        old enough that USMS will not revise it any further.
+        """
+        last_checked = min(
+            (
+                last_checked_map[timestamp]
+                for timestamp in stored_consumptions
+                if timestamp in last_checked_map
+            ),
+            default=None,
+        )
+        if last_checked is None:
+            return False
+
+        now = datetime.now().astimezone()
+        return (now - last_checked < REFRESH_INTERVAL) or (now - date > settled_after)
+
     @requires_init
-    def get_hourly_consumptions(self, date: datetime) -> "pd.Series":
+    def get_hourly_consumptions(self, date: datetime) -> dict[datetime, float]:
         """Check and return consumptions found for a given day."""
-        day_consumption = self.hourly_consumptions[
-            self.hourly_consumptions.index.date == date.date()
-        ]
-        # Check if consumption for this date was already fetched
-        if not day_consumption.empty:
-            now = datetime.now().astimezone()
+        day_consumption = {
+            timestamp: consumption
+            for timestamp, consumption in self.hourly_consumptions.items()
+            if timestamp.date() == date.date()
+        }
 
-            last_checked = day_consumption["last_checked"].min()
-            time_since_last_checked = now - last_checked
+        # Check if consumption for this date was already fetched, and is still usable
+        if day_consumption and self._is_stored_data_usable(
+            day_consumption,
+            self.hourly_last_checked,
+            date,
+            timedelta(days=3),
+        ):
+            logger.debug(f"[{self.no}] Found consumptions for: {date.date()}")
+            return day_consumption
 
-            time_since_given_date = now - date
-
-            # If not enough time has passed since the last check
-            if (time_since_last_checked < REFRESH_INTERVAL) or (
-                # Or the date requested is over 3 days ago
-                time_since_given_date > timedelta(days=3)
-            ):
-                # Then just use stored data
-                logger.debug(f"[{self.no}] Found consumptions for: {date.date()}")
-                return day_consumption[self.unit]
-        return new_consumptions_dataframe(self.unit, "h")[self.unit]
+        return new_consumptions(self.unit, "h")
 
     @requires_init
-    def get_daily_consumptions(self, date: datetime) -> "pd.Series":
+    def get_daily_consumptions(self, date: datetime) -> dict[datetime, float]:
         """Check and return consumptions found for a given month."""
-        month_consumption = self.daily_consumptions[
-            (self.daily_consumptions.index.month == date.month)
-            & (self.daily_consumptions.index.year == date.year)
-        ]
-        # Check if consumption for this date was already fetched
-        if not month_consumption.empty:
-            now = datetime.now().astimezone()
+        month_consumption = {
+            timestamp: consumption
+            for timestamp, consumption in self.daily_consumptions.items()
+            if (timestamp.month, timestamp.year) == (date.month, date.year)
+        }
 
-            last_checked = month_consumption["last_checked"].min()
-            time_since_last_checked = now - last_checked
+        # Check if consumption for this date was already fetched, and is still usable
+        if month_consumption and self._is_stored_data_usable(
+            month_consumption,
+            self.daily_last_checked,
+            date,
+            timedelta(days=34),
+        ):
+            logger.debug(f"[{self.no}] Found consumptions for: {date.year}-{date.month}")
+            return month_consumption
 
-            time_since_given_date = now - date
-
-            # If not enough time has passed since the last check
-            if (time_since_last_checked < REFRESH_INTERVAL) or (
-                # Or the date requested is over 1 month + 3 days ago
-                time_since_given_date > timedelta(days=34)
-            ):
-                # Then just use stored data
-                logger.debug(f"[{self.no}] Found consumptions for: {date.year}-{date.month}")
-                return month_consumption[self.unit]
-        return new_consumptions_dataframe(self.unit, "D")[self.unit]
+        return new_consumptions(self.unit, "D")
 
     def _earliest_daily_consumption_date(self) -> datetime:
         """
-        Return the earliest date present in the daily consumptions series.
+        Return the earliest date present in the daily consumptions.
 
         Used for meters that expose no hourly report (water): there is nothing to
         probe for, so the earliest date we can claim is the earliest daily reading
         already held. Nothing is cached when no data is held yet, so a later call
         can still resolve it once daily consumptions have been fetched.
         """
-        if self.daily_consumptions.empty:
+        if not self.daily_consumptions:
             return datetime.now().astimezone()
 
-        self.earliest_consumption_date = self.daily_consumptions.index.min()
+        self.earliest_consumption_date = min(self.daily_consumptions)
         return self.earliest_consumption_date
 
-    def calculate_total_consumption(self, consumptions: "pd.Series") -> float:
-        """Calculate the total consumption from a given pd.Series."""
-        if consumptions.empty:
+    def calculate_total_consumption(self, consumptions: dict[datetime, float]) -> float:
+        """Calculate the total consumption from the given consumptions."""
+        if not consumptions:
             return 0.0
-        total_consumption = round(consumptions.sum(), 3)
 
-        return total_consumption
+        return round(sum(consumptions.values()), 3)
 
-    def calculate_total_cost(self, consumptions: "pd.Series") -> float:
-        """Calculate the total cost from a given pd.Series."""
+    def calculate_total_cost(self, consumptions: dict[datetime, float]) -> float:
+        """Calculate the total cost from the given consumptions."""
         total_consumption = self.calculate_total_consumption(consumptions)
 
         tariff = None
