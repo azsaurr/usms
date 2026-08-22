@@ -68,8 +68,8 @@ class SQLiteUSMSStorage(BaseUSMSStorage):
     def get_consumption(
         self,
         meter_no: str,
-        timestamp: str,
-    ) -> tuple[float, str] | None:
+        timestamp: int,
+    ) -> tuple[int, float, int] | None:
         """Retrieve a specific consumption record."""
         with self.conn:
             row = self.conn.execute(
@@ -84,7 +84,7 @@ class SQLiteUSMSStorage(BaseUSMSStorage):
     def get_all_consumptions(
         self,
         meter_no: str,
-    ) -> list[tuple[str, float, str]]:
+    ) -> list[tuple[int, float, int]]:
         """Retrieve all consumption records for a specific meter_no."""
         with self.conn:
             rows = self.conn.execute(

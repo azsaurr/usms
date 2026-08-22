@@ -87,7 +87,7 @@ def get_storage_manager(storage_type: str, storage_path: Path | None = None) -> 
 
 
 def consumptions_from_storage(
-    consumptions: list[tuple[str, float, str]],
+    consumptions: list[tuple[int, float, int]],
 ) -> tuple[dict[datetime, float], dict[datetime, datetime]]:
     """
     Convert consumptions retrieved from persistent storage into in-memory mappings.

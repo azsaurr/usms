@@ -16,7 +16,7 @@ from usms.parsers.error_message_parser import ErrorMessageParser
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
-    from usms.core.protocols import HTTPXResponseProtocol
+    from usms.core.protocols import HTTPXClientProtocol, HTTPXResponseProtocol
 
 
 def _extract_sig(history: "Iterable") -> str | None:
@@ -39,6 +39,11 @@ class USMSClientAuthMixin:
 
     _username: str
     _password: str
+
+    # Supplied by USMSClient, which composes this mixin. Declared so the contract
+    # is explicit rather than implied, and so type checkers can follow it.
+    async_mode: bool
+    client: "HTTPXClientProtocol"
 
     LOGIN_URL = "https://www.usms.com.bn/SmartMeter/ResLogin"
     SESSION_URL = "https://www.usms.com.bn/SmartMeter/LoginSession.aspx"

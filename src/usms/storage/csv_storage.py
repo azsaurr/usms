@@ -98,7 +98,7 @@ class CSVUSMSStorage(BaseUSMSStorage):
         self,
         meter_no: str,
         timestamp: int,
-    ) -> tuple[str, float, str] | None:
+    ) -> tuple[int, float, int] | None:
         """Retrieve a specific consumption record."""
         with self.file_path.open("r") as f:
             reader = csv.reader(f)
@@ -111,7 +111,7 @@ class CSVUSMSStorage(BaseUSMSStorage):
     def get_all_consumptions(
         self,
         meter_no: str,
-    ) -> list[tuple[str, float, str]]:
+    ) -> list[tuple[int, float, int]]:
         """Retrieve all consumption records for a specific meter_no."""
         with self.file_path.open("r") as f:
             reader = csv.reader(f)
