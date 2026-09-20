@@ -20,6 +20,11 @@ from usms.exceptions.errors import (
     USMSUnsupportedStorageError,
 )
 from usms.factory import initialize_usms_account
+from usms.models.projection import (
+    USMSMonthProjection,
+    credit_exhaustion_time,
+    project_month_consumption,
+)
 from usms.models.tariff import USMSTariff, USMSTariffTier
 from usms.services.account import BaseUSMSAccount
 from usms.services.async_.account import AsyncUSMSAccount
@@ -49,11 +54,14 @@ __all__ = [
     "USMSMeter",
     "USMSMeterNumberError",
     "USMSMissingCredentialsError",
+    "USMSMonthProjection",
     "USMSNotInitializedError",
     "USMSPageResponseError",
     "USMSTariff",
     "USMSTariffTier",
     "USMSUnsupportedStorageError",
+    "credit_exhaustion_time",
     "get_storage_manager",
     "initialize_usms_account",
+    "project_month_consumption",
 ]

@@ -1,12 +1,19 @@
 """Base USMS Meter Service."""
 
 from abc import ABC
+from dataclasses import replace
+from datetime import date as date_type
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from usms.config.constants import BRUNEI_TZ, REFRESH_INTERVAL, TARIFFS
 from usms.models.meter import USMSMeter as USMSMeterModel
+from usms.models.projection import (
+    USMSMonthProjection,
+    credit_exhaustion_time,
+    project_month_consumption,
+)
 from usms.parsers.error_message_parser import ErrorMessageParser
 from usms.parsers.meter_consumptions_parser import MeterConsumptionsParser
 from usms.parsers.meter_payment_info_parser import MeterPaymentInfoParser
@@ -279,6 +286,62 @@ class BaseUSMSMeter(ABC, USMSMeterModel):
             return 0.0
 
         return round(sum(consumptions.values()), 3)
+
+    @property
+    def tariff(self):
+        """Return the tariff that applies to this meter, or None if unknown."""
+        for meter_type, meter_tariff in TARIFFS.items():
+            if meter_type.upper() in self.type.upper():
+                return meter_tariff
+        return None
+
+    def project_month(
+        self,
+        daily_consumption: dict[date_type, float],
+        now: datetime | None = None,
+    ) -> USMSMonthProjection | None:
+        """
+        Project how this billing month will end.
+
+        `daily_consumption` maps a date to that day's total consumption, as
+        returned by `daily_consumptions_from()` or assembled by the caller from
+        its own store. Returns None when there is not yet enough history.
+
+        The consumption projection is account-independent maths; this method
+        additionally prices it on the meter's own tariff and, for a prepaid
+        meter, estimates when the remaining credit is exhausted.
+        """
+        now = now or datetime.now(tz=BRUNEI_TZ)
+        projection = project_month_consumption(daily_consumption, now)
+        if projection is None:
+            return None
+
+        tariff = self.tariff
+        total_cost = (
+            tariff.calculate_cost(projection.total_consumption) if tariff is not None else None
+        )
+        return replace(
+            projection,
+            total_cost=total_cost,
+            credit_runs_out_at=credit_exhaustion_time(
+                self.remaining_unit, projection.daily_rate, now
+            ),
+        )
+
+    @staticmethod
+    def daily_consumptions_from(
+        consumptions: dict[datetime, float],
+    ) -> dict[date_type, float]:
+        """Collapse timestamped consumptions into per-day totals.
+
+        Accepts either hourly or daily series, so the same call works for an
+        electricity meter (hourly) and a water meter (daily only).
+        """
+        daily: dict[date_type, float] = {}
+        for timestamp, consumption in consumptions.items():
+            day = timestamp.date()
+            daily[day] = daily.get(day, 0.0) + consumption
+        return daily
 
     def calculate_total_cost(self, consumptions: dict[datetime, float]) -> float:
         """

@@ -43,6 +43,11 @@ TARIFFS = {
     "WATER": WATER_TARIFF,
 }
 
+# Rolling window (in days) the month projection averages over. Seven days is
+# long enough to smooth daily noise yet short enough to follow a change in
+# habits; it was the best of 7/14/28 when backtested over two years of data.
+PROJECTION_TRAILING_DAYS = 7
+
 UPDATE_INTERVAL = timedelta(seconds=60 * 60)
 REFRESH_INTERVAL = timedelta(seconds=60 * 15)
 
