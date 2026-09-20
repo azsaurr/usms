@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from usms.services.account import BaseUSMSAccount
 
 
-def initialize_usms_account(  # noqa: PLR0913
+def initialize_usms_account(  # noqa: PLR0913, PLR0917
     username: str | None = None,
     password: str | None = None,
     client: "HTTPXClientProtocol | None" = None,
