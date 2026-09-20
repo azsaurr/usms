@@ -7,10 +7,10 @@ from types import TracebackType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    # `typing.Self` is 3.11+ (PEP 673) and this package supports 3.10. Importing
-    # it from typing_extensions only under TYPE_CHECKING keeps the precise return
-    # type for type-checkers (which ship typing_extensions) without adding a
-    # runtime dependency; the annotation below is quoted so it is never evaluated.
+    # `typing.Self` is 3.11+ (PEP 673) and this package supports 3.10, so it is
+    # imported from typing_extensions under TYPE_CHECKING only. Type-checkers ship
+    # typing_extensions, so the precise return annotation costs no runtime
+    # dependency; the annotation below is quoted so it is never evaluated.
     from typing_extensions import Self
 
 
