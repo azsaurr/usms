@@ -1,3 +1,13 @@
+## v1.1.0 (2026-09-20)
+
+### Feat
+
+- **projection**: project month-end consumption, cost and credit runway
+
+### Fix
+
+- **storage**: close the SQLite connection instead of leaking it
+
 ## v1.0.0 (2026-08-22)
 
 ### Feat
