@@ -1,6 +1,7 @@
 """Test the storage backends."""
 
 import pathlib
+from collections.abc import Iterator
 
 import pytest
 
@@ -13,11 +14,19 @@ OTHER_METER = "2402007817"
 
 
 @pytest.fixture(params=["csv", "sqlite"])
-def storage(request, tmp_path: pathlib.Path) -> BaseUSMSStorage:
-    """Return each storage backend in turn, so both honour the same contract."""
+def storage(request, tmp_path: pathlib.Path) -> Iterator[BaseUSMSStorage]:
+    """Return each storage backend in turn, so both honour the same contract.
+
+    Closed on teardown: SQLite holds a connection for its lifetime, and leaving
+    it to the garbage collector raises `ResourceWarning: unclosed database`,
+    which this suite escalates to an error.
+    """
     if request.param == "csv":
-        return CSVUSMSStorage(tmp_path / "usms.csv")
-    return SQLiteUSMSStorage(tmp_path / "usms.db")
+        backend = CSVUSMSStorage(tmp_path / "usms.csv")
+    else:
+        backend = SQLiteUSMSStorage(tmp_path / "usms.db")
+    with backend:
+        yield backend
 
 
 def _records(count: int, *, meter: str = METER, offset: float = 0.0) -> list[tuple]:
@@ -91,3 +100,18 @@ def test_single_and_bulk_insert_agree(storage) -> None:
     storage.insert_or_replace_many(_records(6))
 
     assert sorted(storage.get_all_consumptions(METER)) == one_at_a_time
+
+
+def test_close_is_idempotent(tmp_path: pathlib.Path) -> None:
+    """Test a backend can be closed twice without complaint."""
+    backend = SQLiteUSMSStorage(tmp_path / "twice.db")
+    backend.close()
+    backend.close()
+
+
+def test_storage_works_as_a_context_manager(tmp_path: pathlib.Path) -> None:
+    """Test the context manager closes the backend on exit."""
+    with SQLiteUSMSStorage(tmp_path / "ctx.db") as backend:
+        backend.insert_or_replace_many(_records(3))
+        assert len(backend.get_all_consumptions(METER)) == 3
+    assert backend.conn is None

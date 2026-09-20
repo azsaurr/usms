@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from pathlib import Path
+from types import TracebackType
+from typing import Self
 
 
 class BaseUSMSStorage(ABC):
@@ -51,3 +53,29 @@ class BaseUSMSStorage(ABC):
         meter_no: str,
     ) -> list[tuple[int, float, int]]:
         """Retrieve all consumption records for a specific meter_no."""
+
+    def close(self) -> None:  # noqa: B027
+        """
+        Release any resources the backend holds.
+
+        Deliberately concrete rather than abstract: third-party backends that
+        predate this method, and those that hold nothing open, stay valid
+        without having to implement it.
+
+        Backends that keep a handle open for their lifetime - SQLite keeps a
+        connection - must override this; leaving one to be reclaimed by the
+        garbage collector raises `ResourceWarning: unclosed database`.
+        """
+
+    def __enter__(self) -> Self:
+        """Enter a context manager that closes the storage on exit."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Close the storage when leaving the context."""
+        self.close()

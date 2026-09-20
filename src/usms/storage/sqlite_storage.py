@@ -99,5 +99,7 @@ class SQLiteUSMSStorage(BaseUSMSStorage):
         return rows
 
     def close(self) -> None:
-        """Close the connection."""
-        self.conn.close()
+        """Close the connection. Safe to call more than once."""
+        if getattr(self, "conn", None) is not None:
+            self.conn.close()
+            self.conn = None
