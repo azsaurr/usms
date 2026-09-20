@@ -1,3 +1,9 @@
+## v1.1.2 (2026-09-20)
+
+### Fix
+
+- **storage**: reword a comment that tripped the type-comment hook
+
 ## v1.1.1 (2026-09-20)
 
 ### Fix
