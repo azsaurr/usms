@@ -4,7 +4,14 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from pathlib import Path
 from types import TracebackType
-from typing import Self
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # `typing.Self` is 3.11+ (PEP 673) and this package supports 3.10. Importing
+    # it from typing_extensions only under TYPE_CHECKING keeps the precise return
+    # type for type-checkers (which ship typing_extensions) without adding a
+    # runtime dependency; the annotation below is quoted so it is never evaluated.
+    from typing_extensions import Self
 
 
 class BaseUSMSStorage(ABC):
@@ -67,7 +74,7 @@ class BaseUSMSStorage(ABC):
         garbage collector raises `ResourceWarning: unclosed database`.
         """
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> "Self":
         """Enter a context manager that closes the storage on exit."""
         return self
 
