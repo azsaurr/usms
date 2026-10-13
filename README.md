@@ -116,19 +116,58 @@ print(meter.topup_url)
 
 ## Login captcha
 
-Since October 2026 USMS asks for a captcha after accepting the username and
-password. The library solves it itself with a small bundled model (numpy and
-Pillow only, so it installs anywhere, Home Assistant OS included), fetching a
-fresh captcha and retrying when a guess is rejected. If every attempt fails, the
-login raises `USMSCaptchaError` - distinct from `USMSLoginError`, because the
-credentials themselves were accepted.
+### What changed
 
-To use your own solver, pass any callable taking the captcha's PNG bytes and
-returning its text:
+In October 2026 USMS added an image captcha (a DevExpress `ASPxCaptcha`) to the
+residential login. Every login since then has failed with `USMSLoginError: Invalid
+login.`, even with the correct password. The captcha is a second step, not a field
+of the first form:
+
+1. The username and password are posted with the captcha left empty. If they are
+   correct, USMS answers with a redirect back to the login page, now carrying an
+   `sc` query parameter. Wrong credentials still get the usual error message here.
+2. That `ResLogin?sc=...` page serves the captcha that will actually be checked:
+   five characters, lowercase letters and digits, warped and overlapping.
+3. The credentials and the answer are posted to `ResLogin?sc=...`. A correct answer
+   redirects through `LoginSession` with the `Sig` token, as before.
+
+USMS also added a field to the meter card at the same time, which shifted the
+position of every field after it, so meter details are now read by their label
+rather than by position.
+
+### How the library gets past it
+
+The library performs the step itself. It reads the captcha with a small
+text-recognition network bundled with the package, fetches a fresh captcha
+instead of submitting when a guess is not five characters long, and retries
+with a new one when an answer is rejected. Measured against live USMS captchas,
+about nine in ten submitted answers are accepted, and three attempts are allowed
+per login.
+
+The network is [ddddocr](https://github.com/sml2h3/ddddocr)'s general-purpose
+OCR model (`common_old.onnx`). ddddocr itself needs onnxruntime, which publishes
+no wheels for musl Linux and so cannot be installed on Home Assistant OS. The
+model is therefore exported once (see `tools/export_captcha_model.py`) into a
+node list and weight arrays, and `usms.captcha` evaluates it with numpy alone. Its
+8210 output classes are cut down to the CTC blank plus a-z and 0-9, which shrinks
+the model to 3.7 MB and means it can never answer with a character USMS does
+not draw. The only new dependencies are numpy and Pillow.
+
+If every attempt fails, the login raises `USMSCaptchaError`. It is deliberately
+not a `USMSLoginError`: the credentials were accepted, and retrying later with
+fresh captchas usually works, whereas prompting for the password again would not.
+
+To use your own solver, pass any callable that takes the captcha image as PNG
+bytes and returns its text:
 
 ```py
 account = initialize_usms_account(username="...", password="...", captcha_solver=my_solver)
 ```
+
+> [!NOTE]
+> This keeps an account holder's own access to their own meter data working. It
+> sends no more requests than a person logging in would, and should USMS offer an
+> official API, that would be the better route.
 
 ## Migrating from 0.x
 
@@ -224,7 +263,14 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ## Acknowledgments
 
 * [USMS](https://www.usms.com.bn/smartmeter/about.html)
-* [ddddocr](https://github.com/sml2h3/ddddocr) (MIT), whose OCR model the captcha solver is derived from
+* [ddddocr](https://github.com/sml2h3/ddddocr) by [sml2h3](https://github.com/sml2h3), MIT
+  licensed. The captcha solver's model (`src/usms/captcha/graph.json` and
+  `weights.npz`) is derived from ddddocr's `common_old.onnx`, reduced to the
+  characters USMS uses. ddddocr's licence is reproduced in
+  `src/usms/captcha/LICENSE-ddddocr`.
+* [ONNX](https://onnx.ai/) and [ONNX Runtime](https://onnxruntime.ai/), whose operator
+  specifications (including the `com.microsoft` contrib operators such as
+  `DynamicQuantizeLSTM`) the numpy interpreter in `usms.captcha.model` follows.
 
 ### Project Template
 
