@@ -13,6 +13,8 @@ authors = [
 requires-python = ">=3.10,<4.0"
 dependencies = [
     "httpx[http2]>=0.28.1",
+    "numpy>=1.26.0",
+    "pillow>=10.1.0",
 ]
 license = {file = "LICENSE"}
 
@@ -85,6 +87,8 @@ unfixable = ["ERA001", "F401", "F841", "T201", "T203"]
 [tool.ruff.lint.per-file-ignores]
 # Tests take untyped fixtures and compare against literal expectations.
 "tests/**" = ["ANN001", "ANN201", "PLR2004"]
+# Standalone uv scripts, run by hand rather than imported.
+"tools/**" = ["INP001"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
