@@ -31,6 +31,21 @@ class USMSLoginError(Exception):
         super().__init__(self.message)
 
 
+class USMSCaptchaError(Exception):
+    """
+    Exception raised for when the login captcha could not be solved.
+
+    Deliberately not a `USMSLoginError`: the credentials were accepted, and asking
+    the user to re-enter them would not help. Retrying later, with fresh captchas,
+    usually does.
+    """
+
+    def __init__(self, message: str = "Unable to solve the USMS login captcha.") -> None:
+        """Initialize the exception."""
+        self.message = message
+        super().__init__(self.message)
+
+
 class USMSPageResponseError(Exception):
     """Exception raised for when error during page retrieval."""
 

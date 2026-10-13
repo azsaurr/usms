@@ -16,12 +16,13 @@ import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from usms.core.auth import USMSAuthMixin
+from usms.core.auth import MAX_CAPTCHA_ATTEMPTS, MAX_CAPTCHA_FETCHES, USMSAuthMixin
 from usms.core.state_manager import USMSClientASPStateMixin
-from usms.exceptions.errors import USMSLoginError, USMSPageResponseError
+from usms.exceptions.errors import USMSCaptchaError, USMSLoginError, USMSPageResponseError
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
+    from usms.captcha import CaptchaSolver
     from usms.core.protocols import HTTPXClientProtocol, HTTPXResponseProtocol
 
 # How many times a request is retried behind a re-authentication before giving up.
@@ -55,6 +56,7 @@ class BaseUSMSClient(USMSClientASPStateMixin, USMSAuthMixin):
         client: "HTTPXClientProtocol",
         *,
         owns_client: bool = False,
+        captcha_solver: "CaptchaSolver | None" = None,
     ) -> None:
         """
         Initialize USMS Client.
@@ -63,8 +65,12 @@ class BaseUSMSClient(USMSClientASPStateMixin, USMSAuthMixin):
         therefore be closed on our behalf. It stays False for a caller-supplied
         client - Home Assistant, for one, hands over a shared client that would
         break the rest of the application if we closed it.
+
+        `captcha_solver` replaces the built-in model that reads the login captcha.
         """
-        USMSAuthMixin.__init__(self, username=username, password=password)
+        USMSAuthMixin.__init__(
+            self, username=username, password=password, captcha_solver=captcha_solver
+        )
         USMSClientASPStateMixin.__init__(self)
 
         client.follow_redirects = True
@@ -155,15 +161,42 @@ class USMSClient(BaseUSMSClient):
         response = self.client.get(url=self.LOGIN_URL)
         payload = self._build_login_payload(response.read())
 
-        # Submit the credentials.
+        # Submit the credentials; USMS checks them before asking for a captcha.
         response = self.client.post(url=self.LOGIN_URL, data=payload)
         self._raise_for_login_error(response.read())
 
-        self._adopt_session_cookie()
+        if self._is_captcha_challenge(response):
+            response = self._answer_captcha(response)
 
-        # Exchange the Sig token embedded in the redirect for an active session.
-        self.client.get(url=self._session_url(self._resolve_sig(response)))
+        # A login ends in a redirect through LoginSession carrying the Sig token,
+        # which the client has already followed into an authenticated session.
+        self._resolve_sig(response)
+        self._adopt_session_cookie()
         logger.debug("Authentication flow complete")
+
+    def _answer_captcha(self, page: "HTTPXResponseProtocol") -> "HTTPXResponseProtocol":
+        """Solve and submit the captcha on `page`, retrying with fresh ones."""
+        for attempt in range(1, MAX_CAPTCHA_ATTEMPTS + 1):
+            page, answer = self._read_captcha(page)
+            response = self.client.post(
+                url=str(page.url), data=self._build_login_payload(page.read(), answer)
+            )
+            if not self._is_captcha_challenge(response):
+                return response
+            logger.debug("Captcha answer rejected (attempt %s)", attempt)
+            page = response
+        raise USMSCaptchaError
+
+    def _read_captcha(self, page: "HTTPXResponseProtocol") -> tuple["HTTPXResponseProtocol", str]:
+        """Return a captcha page and the solver's answer, once it is a plausible one."""
+        for _ in range(MAX_CAPTCHA_FETCHES):
+            image = self.client.get(url=self._captcha_image_url(page.read())).read()
+            answer = self._captcha_solver(image)
+            if self._is_plausible_captcha(answer):
+                return page, answer
+            # Reloading the page issues a new captcha; the old one is never submitted.
+            page = self.client.get(url=str(page.url))
+        raise USMSCaptchaError
 
     def close(self) -> None:
         """Close the underlying client, if this instance created it."""
@@ -233,15 +266,45 @@ class AsyncUSMSClient(BaseUSMSClient):
         response = await self.client.get(url=self.LOGIN_URL)
         payload = self._build_login_payload(await response.aread())
 
-        # Submit the credentials.
+        # Submit the credentials; USMS checks them before asking for a captcha.
         response = await self.client.post(url=self.LOGIN_URL, data=payload)
         self._raise_for_login_error(await response.aread())
 
-        self._adopt_session_cookie()
+        if self._is_captcha_challenge(response):
+            response = await self._answer_captcha(response)
 
-        # Exchange the Sig token embedded in the redirect for an active session.
-        await self.client.get(url=self._session_url(self._resolve_sig(response)))
+        # A login ends in a redirect through LoginSession carrying the Sig token,
+        # which the client has already followed into an authenticated session.
+        self._resolve_sig(response)
+        self._adopt_session_cookie()
         logger.debug("Authentication flow complete")
+
+    async def _answer_captcha(self, page: "HTTPXResponseProtocol") -> "HTTPXResponseProtocol":
+        """Solve and submit the captcha on `page`, retrying with fresh ones."""
+        for attempt in range(1, MAX_CAPTCHA_ATTEMPTS + 1):
+            page, answer = await self._read_captcha(page)
+            response = await self.client.post(
+                url=str(page.url), data=self._build_login_payload(await page.aread(), answer)
+            )
+            if not self._is_captcha_challenge(response):
+                return response
+            logger.debug("Captcha answer rejected (attempt %s)", attempt)
+            page = response
+        raise USMSCaptchaError
+
+    async def _read_captcha(
+        self, page: "HTTPXResponseProtocol"
+    ) -> tuple["HTTPXResponseProtocol", str]:
+        """Return a captcha page and the solver's answer, once it is a plausible one."""
+        for _ in range(MAX_CAPTCHA_FETCHES):
+            image = await self.client.get(url=self._captcha_image_url(await page.aread()))
+            # Solving is CPU-bound for up to a second or so; keep it off the event loop.
+            answer = await asyncio.to_thread(self._captcha_solver, await image.aread())
+            if self._is_plausible_captcha(answer):
+                return page, answer
+            # Reloading the page issues a new captcha; the old one is never submitted.
+            page = await self.client.get(url=str(page.url))
+        raise USMSCaptchaError
 
     async def aclose(self) -> None:
         """Close the underlying client, if this instance created it."""

@@ -114,6 +114,22 @@ print(meter.customer_type, meter.total_debt_owing, meter.has_debt)
 print(meter.topup_url)
 ```
 
+## Login captcha
+
+Since October 2026 USMS asks for a captcha after accepting the username and
+password. The library solves it itself with a small bundled model (numpy and
+Pillow only, so it installs anywhere, Home Assistant OS included), fetching a
+fresh captcha and retrying when a guess is rejected. If every attempt fails, the
+login raises `USMSCaptchaError` - distinct from `USMSLoginError`, because the
+credentials themselves were accepted.
+
+To use your own solver, pass any callable taking the captcha's PNG bytes and
+returning its text:
+
+```py
+account = initialize_usms_account(username="...", password="...", captcha_solver=my_solver)
+```
+
 ## Migrating from 0.x
 
 **Consumptions are now plain dictionaries.** Every method that returned a
@@ -208,6 +224,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ## Acknowledgments
 
 * [USMS](https://www.usms.com.bn/smartmeter/about.html)
+* [ddddocr](https://github.com/sml2h3/ddddocr) (MIT), whose OCR model the captcha solver is derived from
 
 ### Project Template
 

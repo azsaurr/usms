@@ -17,6 +17,7 @@ from usms.storage.base_storage import BaseUSMSStorage
 from usms.utils.helpers import get_storage_manager
 
 if TYPE_CHECKING:
+    from usms.captcha import CaptchaSolver
     from usms.services.account import BaseUSMSAccount
 
 
@@ -29,6 +30,7 @@ def initialize_usms_account(  # noqa: PLR0913, PLR0917
     storage_path: str | None = None,
     storage_manager: "BaseUSMSStorage | None" = None,
     async_mode: bool | None = None,  # noqa: FBT001  # kwargs-style factory; kw-only would break callers
+    captcha_solver: "CaptchaSolver | None" = None,
 ) -> "BaseUSMSAccount":
     """
     Initialize and return a USMSAccount or AsyncUSMSAccount instance.
@@ -55,6 +57,9 @@ def initialize_usms_account(  # noqa: PLR0913, PLR0917
         A pre-initialized storage manager instance.
     async_mode : bool | None
         Whether to use asynchronous mode. If True, has to be awaited.
+    captcha_solver : CaptchaSolver | None
+        Reads the login captcha from its PNG bytes. Defaults to the built-in model.
+        Ignored when `usms_client` is provided.
 
     Returns
     -------
@@ -111,6 +116,7 @@ def initialize_usms_account(  # noqa: PLR0913, PLR0917
             username=username,
             password=password,
             owns_client=created_client,
+            captcha_solver=captcha_solver,
         )
 
     if async_mode is not None:
