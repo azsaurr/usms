@@ -1,3 +1,9 @@
+## v1.3.1 (2026-10-13)
+
+### Fix
+
+- **account**: count changed credit or units as new data, and check the session properly
+
 ## v1.3.0 (2026-10-13)
 
 ### Feat
