@@ -103,3 +103,38 @@ def test_water_tariff_calculate_cost_matches_published_tariff() -> None:
     assert water_tariff.calculate_cost(60.0) == pytest.approx(8.40, abs=tolerance)
     assert water_tariff.calculate_cost(54.54) == pytest.approx(6.00, abs=tolerance)
     assert water_tariff.calculate_cost(10.0) == pytest.approx(1.10, abs=tolerance)
+
+
+def test_cost_between_hours_adds_up_to_the_month() -> None:
+    """
+    Test that pricing a month hour by hour gives the cost of the whole month.
+
+    Rounding each hour to the cent would drift; cost_between stays unrounded so the
+    pieces sum to calculate_cost of the total.
+    """
+    hourly = [1.37] * 744 + [0.004] * 50  # a 31-day month, plus some tiny readings
+    running, total = 0.0, 0.0
+    for consumption in hourly:
+        total += electric_tariff.cost_between(running, running + consumption)
+        running += consumption
+
+    assert round(total, 2) == electric_tariff.calculate_cost(running)
+
+
+def test_cost_between_splits_an_hour_across_a_tier_boundary() -> None:
+    """Test that an hour crossing 600 kWh is priced partly at each tier."""
+    cost = electric_tariff.cost_between(590.0, 610.0)
+
+    assert cost == pytest.approx(10 * 0.01 + 10 * 0.08)
+
+
+def test_cost_between_is_zero_for_no_consumption() -> None:
+    """Test that an hour without consumption costs nothing, at any point in the month."""
+    assert electric_tariff.cost_between(0.0, 0.0) == 0.0
+    assert electric_tariff.cost_between(2500.0, 2500.0) == 0.0
+
+
+def test_calculate_cost_is_unchanged_by_the_unrounded_refactor() -> None:
+    """Test that calculate_cost still rounds to the cent."""
+    assert electric_tariff.calculate_cost(1387.5) == 69.0
+    assert water_tariff.calculate_cost(60.0) == round(54.54 * 0.11 + 5.46 * 0.44, 2)

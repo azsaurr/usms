@@ -28,6 +28,21 @@ class USMSTariff:
 
     def calculate_cost(self, consumption: float) -> float:
         """Calculate the cost for given unit consumption, according to the tariff."""
+        return round(self._unrounded_cost(consumption), 2)
+
+    def cost_between(self, consumed_before: float, consumed_after: float) -> float:
+        """
+        Return the unrounded cost of the units consumed between two running totals.
+
+        Both totals count from the start of the same billing period, so a slice that
+        crosses a tier boundary is priced partly at each tier. The result is left
+        unrounded: summing many small slices - an hour at a time, say - must add up to
+        the cost of the whole period, and rounding each one to the cent would not.
+        """
+        return self._unrounded_cost(consumed_after) - self._unrounded_cost(consumed_before)
+
+    def _unrounded_cost(self, consumption: float) -> float:
+        """Return the cost of a period's consumption without rounding to the cent."""
         cost = 0.0
 
         for tier in self.tiers:
@@ -40,7 +55,7 @@ class USMSTariff:
             consumption -= bound_range
             cost += bound_range * tier.rate
 
-        return round(cost, 2)
+        return cost
 
     def calculate_unit(self, cost: float, consumed_units: float = 0.0) -> float:
         """
