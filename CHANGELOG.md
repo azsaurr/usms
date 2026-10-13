@@ -1,3 +1,14 @@
+## v1.2.0 (2026-10-13)
+
+### Feat
+
+- **auth**: solve the captcha USMS asks for after the credentials
+- **captcha**: add a numpy-only solver for the USMS login captcha
+
+### Fix
+
+- **parsers**: find meter card fields by caption, not cell number
+
 ## v1.1.2 (2026-09-20)
 
 ### Fix
