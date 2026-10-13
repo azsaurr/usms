@@ -1,3 +1,9 @@
+## v1.3.0 (2026-10-13)
+
+### Feat
+
+- **tariff**: add cost_between for pricing slices of a billing period
+
 ## v1.2.0 (2026-10-13)
 
 ### Feat
