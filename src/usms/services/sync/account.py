@@ -3,13 +3,11 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from usms.config.constants import BRUNEI_TZ
 from usms.core.client import USMSClient
 from usms.parsers.account_info_parser import AccountInfoParser
 from usms.services.account import BaseUSMSAccount
 from usms.services.sync.meter import USMSMeter
 from usms.utils.decorators import requires_init
-from usms.utils.helpers import parse_datetime
 from usms.utils.logging_config import logger
 
 if TYPE_CHECKING:
@@ -107,7 +105,7 @@ class USMSAccount(BaseUSMSAccount):
         by sending a request without retrying or triggering auth logic.
         """
         response = self.session.get("/AccountInfo", auth=None)
-        is_authenticated = not self.auth.is_expired(response)
+        is_authenticated = not self.session.is_expired(response)
 
         if is_authenticated:
             logger.debug("[%s] Account is authenticated", self.reg_no)
@@ -128,12 +126,10 @@ class USMSAccount(BaseUSMSAccount):
 
         self.last_refresh = datetime.now().astimezone()
 
-        for meter in fresh_info.get("meters", []):
-            last_update = parse_datetime(meter.get("last_update")).astimezone(BRUNEI_TZ)
-            if last_update > self.get_latest_update():
-                logger.debug("[%s] New updates found", self.reg_no)
-                self.update_from_json(fresh_info)
-                return True
+        if self.has_new_data(fresh_info):
+            logger.debug("[%s] New updates found", self.reg_no)
+            self.update_from_json(fresh_info)
+            return True
 
         logger.debug("[%s] No new updates found", self.reg_no)
         return False

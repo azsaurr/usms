@@ -1,5 +1,6 @@
 """Base USMS Account Service."""
 
+import copy
 from abc import ABC
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -48,6 +49,32 @@ class BaseUSMSAccount(ABC, USMSAccountModel):
         raise USMSMeterNumberError(meter_no)
 
     @requires_init
+    def has_new_data(self, fresh_info: dict) -> bool:
+        """
+        Return True if freshly fetched account info holds anything the meters lack.
+
+        `last_update` alone stopped being enough in October 2026, when USMS began
+        reporting it as a bare date for electricity meters as well: it now advances
+        once a day, while the credit and units still change every hour. A meter is
+        therefore also new when either of those moved. The fresh values are parsed
+        by the meter's own `update_from_json`, on a copy, so nothing changes yet.
+        """
+        current = {meter.no: meter for meter in self.meters}
+        for meter_data in fresh_info.get("meters", []):
+            meter = current.get(meter_data.get("no"))
+            if meter is None:
+                return True
+
+            fresh = copy.copy(meter)
+            fresh.update_from_json(meter_data)
+            if fresh.last_update > meter.last_update or (
+                fresh.remaining_unit,
+                fresh.remaining_credit,
+            ) != (meter.remaining_unit, meter.remaining_credit):
+                return True
+
+        return False
+
     def get_latest_update(self) -> datetime:
         """Return the latest time a meter was updated."""
         latest_update = datetime.fromtimestamp(0, tz=BRUNEI_TZ)
